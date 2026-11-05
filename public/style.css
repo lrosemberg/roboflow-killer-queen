@@ -6416,6 +6416,8 @@ body[data-touch='true'] textarea {
   }
   #waiting-banner .lobby-readiness {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
     gap: 6px;
   }
   #waiting-banner #start-match {

@@ -12,6 +12,8 @@ import { queuePlayerInput, consumePlayerInput, resetPlayerInput } from '/shared/
 import { ScreenAwake, fullscreenElement, toggleGameFullscreen } from './screen-session.js';
 import { DEFAULT_MAP_ID, isMapId, getMapDefinition } from '/shared/maps.js';
 import { createMapPicker } from './map-picker.js';
+import { NetworkInput } from './network-input.js';
+import { RoomSession, EventCursor } from './network-session.js';
 
 bindPageGestureGuard();
 const $ = (s) => document.querySelector(s);
@@ -58,6 +60,25 @@ let input = blankInput(),
   serverOffset = 0;
 const pingSamples = [];
 const prediction = new InputPrediction();
+let tabStorage;
+try {
+  tabStorage = sessionStorage;
+} catch {}
+const roomSession = new RoomSession(tabStorage);
+const eventCursor = new EventCursor();
+const networkInput = new NetworkInput({
+  isOpen: () => socketReady && !joiningRoom && !joinFailed && socket?.readyState === WebSocket.OPEN,
+  bufferedAmount: () => socket?.bufferedAmount || 0,
+  send: (fields) => {
+    const packet = { type: 'input', seq: seq + 1, ...fields, ...eventCursor.fields() };
+    if (!send(packet)) return false;
+    seq = packet.seq;
+    prediction.record({ seq, input: packet, time: performance.now() });
+    markEventsAcknowledged();
+    return true;
+  },
+  onStall: () => recoverConnection('Connection slowed down. Restoring your seat…'),
+});
 const activityFeed = new ActivityFeed({ limit: 3, ttl: 3800, mergeWindow: 3800 });
 const touchInput = new TouchInput();
 let touchControls;
@@ -92,7 +113,17 @@ let ping = 0,
   socketReady = false,
   pendingAction = null,
   connectionAttempt = 0,
-  reconnectTimer;
+  reconnectTimer,
+  handshakeTimer;
+let joiningRoom = false,
+  joinFailed = false,
+  resumeRequested = false,
+  provisionalResumeToken = '',
+  pendingResumeToken = '',
+  pendingActionSent = false,
+  pendingFallbackUsed = false,
+  eventAckSent = 0,
+  eventAckSentAt = 0;
 let seenEvents = new Set(),
   lastStatus = '',
   gameRenderer,
@@ -276,7 +307,16 @@ function showAnnouncement(text, duration = 2600) {
 }
 function send(message) {
   if (socket?.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify(message));
+    if (socket.bufferedAmount > 64 * 1024) {
+      recoverConnection('Connection slowed down. Restoring your seat…');
+      return false;
+    }
+    try {
+      socket.send(JSON.stringify(message));
+    } catch {
+      recoverConnection('Connection interrupted. Restoring your seat…');
+      return false;
+    }
     return true;
   }
   return false;
@@ -288,16 +328,69 @@ function countdownLocked(data = state) {
   return Boolean(data?.status === 'playing' && roundStartsAt(data) > data.time);
 }
 function sendInput({ reset = false } = {}) {
-  if (room && socketReady) {
-    const packet = {
-      type: 'input',
-      seq: ++seq,
-      ...(countdownLocked() ? blankInput() : input),
-      ...(reset ? { reset: true } : {}),
-    };
-    if (send(packet))
-      prediction.record({ seq: packet.seq, input: packet, time: performance.now() });
+  if (!room || !socketReady || joiningRoom || joinFailed) return;
+  const active =
+    state?.status === 'playing' &&
+    !countdownLocked() &&
+    !document.hidden &&
+    !document.querySelector('dialog[open]');
+  if (reset) networkInput.update(blankInput(), { reset: true, active: false });
+  else if (active) networkInput.update(input);
+  else networkInput.tick(false);
+}
+function markEventsAcknowledged() {
+  if (eventCursor.id > eventAckSent) {
+    eventAckSent = eventCursor.id;
+    roomSession.progress(seq, eventCursor.id, true);
   }
+  eventAckSentAt = performance.now();
+}
+function acknowledgeEvents() {
+  if (
+    room &&
+    socketReady &&
+    !joiningRoom &&
+    !joinFailed &&
+    eventCursor.epoch === room.code &&
+    eventCursor.id > eventAckSent &&
+    performance.now() - eventAckSentAt >= 150 &&
+    socket.bufferedAmount <= 4096 &&
+    send({ type: 'event-ack', id: eventCursor.id, eventEpoch: eventCursor.epoch })
+  )
+    markEventsAcknowledged();
+}
+function reconnectDelay() {
+  return Math.min(6000, 1000 * 2 ** Math.min(connectionAttempt++, 3));
+}
+function watchHandshake(ws, pending = () => joiningRoom) {
+  clearTimeout(handshakeTimer);
+  handshakeTimer = setTimeout(() => {
+    if (socket === ws && (ws.readyState === WebSocket.CONNECTING || pending()))
+      recoverConnection('The connection did not finish. Retrying your seat…', reconnectDelay());
+  }, 8000);
+}
+function recoverConnection(message = 'Reconnecting to your room…', delay = 0) {
+  clearTimeout(handshakeTimer);
+  clearTimeout(reconnectTimer);
+  const previousSocket = socket;
+  socket = null;
+  setConnection(false);
+  joiningRoom = Boolean(room);
+  joinFailed = false;
+  networkInput.reset();
+  resetInput();
+  prediction.reset();
+  roomSession.progress(seq, eventCursor.id, true);
+  if (room) {
+    $('#connection-overlay').hidden = false;
+    $('#disconnect-message').textContent = message;
+  }
+  updateTouchControls();
+  // Old callbacks are ignored; do not wait for a half-open transport to close.
+  if (previousSocket && previousSocket.readyState < WebSocket.CLOSING)
+    previousSocket.close(1000, 'Reconnecting');
+  if (delay) reconnectTimer = setTimeout(connect, delay);
+  else connect();
 }
 function clearCountdown() {
   countdownWasActive = false;
@@ -405,32 +498,66 @@ function confirmBriefing() {
   requestAction(action);
 }
 function requestAction(action) {
+  if (pendingAction) {
+    toast('Your room connection is still in progress.');
+    return;
+  }
+  pendingAction = action;
+  pendingResumeToken = '';
+  pendingActionSent = false;
+  pendingFallbackUsed = false;
+  joinFailed = false;
+  joiningRoom = true;
   if (!socketReady) {
-    pendingAction = action;
     toast('Connecting to the arcade…');
     if (!socket || socket.readyState === WebSocket.CLOSED) connect();
     return;
   }
-  send(action);
+  watchHandshake(socket);
+  sendPendingAction();
+}
+function sendPendingAction() {
+  if (!pendingAction || pendingActionSent || resumeRequested || !provisionalResumeToken) return;
+  // Learn a recoverable credential before creating a room. If joined is lost,
+  // this token can restore the first seat even before its room code is known.
+  const transport = socket;
+  pendingResumeToken = provisionalResumeToken;
+  pendingActionSent = true;
+  if (!send(pendingAction) && socket === transport) pendingActionSent = false;
 }
 function connect() {
   clearTimeout(reconnectTimer);
   if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) return;
+  clearTimeout(handshakeTimer);
   const ws = new WebSocket(
-    `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?protocol=compact-v1`,
+    `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?protocol=compact-v1&resume=1&events=1`,
   );
   socket = ws;
+  let welcomeReceived = false;
+  watchHandshake(ws, () => !welcomeReceived || joiningRoom);
   ws.addEventListener('open', () => {
     if (socket !== ws) return;
     setConnection(true);
-    connectionAttempt = 0;
-    if (pendingAction) {
-      send(pendingAction);
-      pendingAction = null;
-    } else if (room) {
-      send({ type: 'join', code: room.code, name: playerName() });
+    joinFailed = false;
+    provisionalResumeToken = '';
+    pendingActionSent = false;
+    const saved = roomSession.resume(
+      room?.code || new URLSearchParams(location.search).get('room')?.toUpperCase(),
+    );
+    const resume = pendingAction
+      ? pendingResumeToken
+        ? { type: 'resume', token: pendingResumeToken }
+        : null
+      : saved;
+    resumeRequested = Boolean(resume);
+    joiningRoom = Boolean(saved || pendingAction || room);
+    watchHandshake(ws, () => !welcomeReceived || joiningRoom);
+    if (resumeRequested) {
+      send(resume);
+    } else if (!pendingAction && room) {
+      pendingAction = { type: 'join', code: room.code, name: playerName() };
     }
-    send({ type: 'ping', time: performance.now() });
+    send({ type: 'ping', time: performance.now(), ...eventCursor.fields() });
   });
   ws.addEventListener('message', (e) => {
     if (socket !== ws) return;
@@ -440,29 +567,86 @@ function connect() {
     } catch {
       return;
     }
+    if (data.type === 'welcome') {
+      welcomeReceived = true;
+      if (!joiningRoom) {
+        clearTimeout(handshakeTimer);
+        connectionAttempt = 0;
+      }
+    }
     handleMessage(data);
   });
-  ws.addEventListener('close', () => {
+  ws.addEventListener('close', (event) => {
     if (socket !== ws) return;
+    clearTimeout(handshakeTimer);
     setConnection(false);
+    joiningRoom = Boolean(room);
+    networkInput.reset();
     resetInput();
+    if (event.code === 4000) {
+      // A duplicated tab can inherit sessionStorage. The displaced tab must
+      // yield the seat instead of repeatedly evicting the new owner.
+      joiningRoom = false;
+      joinFailed = true;
+      resumeRequested = false;
+      pendingAction = null;
+      pendingResumeToken = '';
+      pendingActionSent = false;
+      roomSession.clear();
+      eventCursor.reset('', 0);
+      eventAckSent = 0;
+      $('#connection-status').textContent = 'Session moved';
+      if (room) {
+        $('#connection-overlay').hidden = false;
+        $('#disconnect-message').textContent =
+          'This player is connected in another tab. Reconnect to join as a new player, or return home.';
+      }
+      updateTouchControls();
+      return;
+    }
+    roomSession.progress(seq, eventCursor.id, true);
     if (room) {
       $('#connection-overlay').hidden = false;
       $('#disconnect-message').textContent = 'Trying to reconnect to your room…';
       updateTouchControls();
     }
-    reconnectTimer = setTimeout(
-      connect,
-      Math.min(6000, 1000 * 2 ** Math.min(connectionAttempt++, 3)),
-    );
+    reconnectTimer = setTimeout(connect, reconnectDelay());
   });
   ws.addEventListener('error', () => {});
 }
 function handleMessage(data) {
   switch (data.type) {
     case 'welcome':
-      localId = data.id;
+      provisionalResumeToken = data.resumeToken || '';
+      if (!resumeRequested) localId = data.id;
+      sendPendingAction();
       break;
+    case 'resume-failed': {
+      resumeRequested = false;
+      const code = room?.code || roomSession.value?.code;
+      roomSession.clear();
+      eventCursor.reset('', 0);
+      if (pendingAction && pendingFallbackUsed) {
+        handleMessage({
+          type: 'error',
+          message: 'The room connection could not be restored. Please retry or return home.',
+        });
+        break;
+      }
+      if (room) toast('Your saved seat expired. Rejoining the room with a fresh player.');
+      if (pendingAction || code) {
+        pendingAction ||= { type: 'join', code, name: playerName() };
+        pendingFallbackUsed = true;
+        pendingResumeToken = '';
+        pendingActionSent = false;
+        watchHandshake(socket);
+        sendPendingAction();
+      } else {
+        joiningRoom = false;
+        clearTimeout(handshakeTimer);
+      }
+      break;
+    }
     case 'rooms':
       renderRooms(data.rooms);
       break;
@@ -479,10 +663,23 @@ function handleMessage(data) {
       receiveMapChange(data);
       break;
     case 'left':
+      provisionalResumeToken = data.resumeToken || '';
       goHome();
       break;
     case 'error':
       toast(data.message);
+      if (joiningRoom) {
+        pendingAction = null;
+        pendingResumeToken = '';
+        pendingActionSent = false;
+        joiningRoom = false;
+        joinFailed = true;
+        clearTimeout(handshakeTimer);
+        networkInput.reset();
+        resetInput();
+        if (room) $('#connection-overlay').hidden = false;
+        updateTouchControls();
+      }
       roomDestinationSignature = '';
       updateRoomDestination();
       if (room && !$('#connection-overlay').hidden)
@@ -507,6 +704,20 @@ function recordPing(sentAt) {
     `NETWORK ROUND TRIP · Latest ${Math.round(sample)} ms / typical ${Math.round(ping)} ms / p95 ${Math.round(p95)} ms. Includes the route to this server; FPS is measured separately.`;
 }
 function enterGame(data) {
+  clearTimeout(handshakeTimer);
+  connectionAttempt = 0;
+  pendingAction = null;
+  pendingResumeToken = '';
+  pendingActionSent = false;
+  pendingFallbackUsed = false;
+  const session = roomSession.joined(data, provisionalResumeToken, seq);
+  eventCursor.reset(data.eventEpoch || data.code, session.eventAck);
+  eventAckSent = session.eventAck;
+  eventAckSentAt = performance.now();
+  joiningRoom = false;
+  joinFailed = false;
+  resumeRequested = false;
+  networkInput.reset();
   closeDialogs();
   room = { ...data.room, code: data.code, hostId: data.hostId };
   map = data.map;
@@ -518,7 +729,7 @@ function enterGame(data) {
   correction = { x: 0, y: 0 };
   seenEvents.clear();
   lastStatus = '';
-  seq = 0;
+  seq = session.seq;
   prediction.reset();
   rolePickerSignature = '';
   scoreboardSignature = '';
@@ -556,6 +767,7 @@ function enterGame(data) {
   unlockAudio();
   updateTouchLayout();
   updateRoomDestination();
+  resetInput();
   for (const id of ['#menu-bots', '#lobby-bots']) {
     const field = $(id);
     field.max = room.maxPlayers - 1;
@@ -563,8 +775,9 @@ function enterGame(data) {
     field.dataset.botTarget = field.value;
   }
 }
-function receiveState(data) {
-  if (!room) return;
+function receiveState(snapshot) {
+  if (!room || !map) return;
+  const data = eventCursor.filter(snapshot);
   // The target follows the lobby roster, then stays fixed for the whole round.
   // Renderer and victory panels share this map, so update it before either reads it.
   if (
@@ -581,6 +794,7 @@ function receiveState(data) {
   serverOffset = data.time - Date.now() + ping / 2;
   const authoritative = data.players.find((p) => p.id === localId);
   if (authoritative) {
+    $('#connection-overlay').hidden = true;
     const before = predicted
       ? { x: predicted.x + correction.x, y: predicted.y + correction.y }
       : null;
@@ -644,6 +858,9 @@ function receiveState(data) {
   );
   updateCountdown();
   updateHUD(authoritative);
+  // Acknowledge only after the renderer, sounds and feed processed this batch.
+  eventCursor.commit(data);
+  roomSession.progress(seq, eventCursor.id);
 }
 function updateHUD(player) {
   if (!state) return;
@@ -1376,8 +1593,17 @@ function renderVictoryScene(now) {
 function goHome() {
   setScoreboard(false);
   pendingAction = null;
+  pendingResumeToken = '';
+  pendingActionSent = false;
+  pendingFallbackUsed = false;
   pendingBriefingAction = null;
   resetInput();
+  networkInput.reset();
+  roomSession.clear();
+  eventCursor.reset('', 0);
+  eventAckSent = 0;
+  joiningRoom = false;
+  joinFailed = false;
   room = null;
   state = null;
   predicted = null;
@@ -1544,6 +1770,9 @@ function composeInput() {
   for (const key of heldKeys) if (keyMap[key]) next[keyMap[key]] = true;
   if (
     !room ||
+    !socketReady ||
+    joiningRoom ||
+    joinFailed ||
     state?.status !== 'playing' ||
     countdownLocked() ||
     document.hidden ||
@@ -1576,6 +1805,8 @@ function updateTouchControls(player = state?.players?.find((p) => p.id === local
     touchEnabled &&
     room &&
     socketReady &&
+    !joiningRoom &&
+    !joinFailed &&
     state?.status === 'playing' &&
     !countdownLocked() &&
     !document.hidden &&
@@ -1590,6 +1821,9 @@ function updateTouchControls(player = state?.players?.find((p) => p.id === local
     Boolean(
       touchEnabled &&
       room &&
+      socketReady &&
+      !joiningRoom &&
+      !joinFailed &&
       state?.status === 'playing' &&
       !document.hidden &&
       $('#scoreboard').hidden &&
@@ -1597,7 +1831,13 @@ function updateTouchControls(player = state?.players?.find((p) => p.id === local
     ),
   );
   screenAwake.setActive(
-    touchEnabled && room && socketReady && state?.status === 'playing' && !document.hidden,
+    touchEnabled &&
+      room &&
+      socketReady &&
+      !joiningRoom &&
+      !joinFailed &&
+      state?.status === 'playing' &&
+      !document.hidden,
   );
   if (player) {
     $('#touch-jump-label').textContent = player.role === 'worker' ? 'JUMP' : 'FLAP';
@@ -1866,12 +2106,7 @@ $$('[data-pick-role]').forEach((button) =>
   button.addEventListener('click', () => chooseRole(button.dataset.pickRole)),
 );
 $('#reconnect').addEventListener('click', () => {
-  if (socket?.readyState === WebSocket.OPEN) {
-    send({ type: 'join', code: room?.code, name: playerName() });
-  } else {
-    connect();
-  }
-  $('#disconnect-message').textContent = 'Reconnecting…';
+  recoverConnection();
 });
 $('#fullscreen').addEventListener('click', fullscreenGame);
 $('#player-names').value = nameMode;
@@ -2069,6 +2304,9 @@ function frame(now) {
     while (accumulator >= 1 / 60) {
       const stepInput = consumePlayerInput(localInputBuffer);
       if (
+        socketReady &&
+        !joiningRoom &&
+        !joinFailed &&
         state.status === 'playing' &&
         !countdownLocked() &&
         Date.now() + serverOffset >= roundStartsAt() &&
@@ -2090,11 +2328,8 @@ function frame(now) {
       lastRender = now;
       frameCount++;
     }
-    if (now - lastSnapshot > 8000) {
-      $('#connection-overlay').hidden = false;
-      $('#disconnect-message').textContent =
-        'The server is taking too long to respond. Reconnect to continue.';
-    }
+    if (socketReady && !joiningRoom && !joinFailed && now - lastSnapshot > 8000)
+      recoverConnection('The connection paused. Restoring your seat…');
   } else accumulator = 0;
   if (now - fpsStart > 1000) {
     $('#fps').textContent = `${Math.round((frameCount * 1000) / (now - fpsStart))} FPS`;
@@ -2105,9 +2340,13 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-setInterval(sendInput, 1000 / 30);
 setInterval(() => {
-  if (socketReady) send({ type: 'ping', time: performance.now() });
+  sendInput();
+  acknowledgeEvents();
+}, 50);
+setInterval(() => {
+  if (socketReady && send({ type: 'ping', time: performance.now(), ...eventCursor.fields() }))
+    markEventsAcknowledged();
 }, 1500);
 const hero = $('#hero-image');
 mapPickers = {
@@ -2136,7 +2375,8 @@ else previewCleanup = renderPreview($('#attract-canvas'));
 const invite = new URLSearchParams(location.search).get('room');
 if (invite) {
   $('#room-code').value = invite.toUpperCase();
-  joinAction({ type: 'join', code: invite.toUpperCase(), name: playerName() });
+  if (!roomSession.resume(invite.toUpperCase()))
+    joinAction({ type: 'join', code: invite.toUpperCase(), name: playerName() });
 }
 updateTouchLayout();
 connect();

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Rendering benchmark · RoboQueen</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #213b3a;
+        background: #faf8e9;
+        font:
+          16px system-ui,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 20px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0;
+      }
+      label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      button,
+      select {
+        min-height: 40px;
+        padding: 7px 12px;
+        font: inherit;
+      }
+      button {
+        background: #deed9e;
+        border: 2px solid #213b3a;
+        cursor: pointer;
+      }
+      .arena {
+        height: min(680px, 68vh);
+        min-height: 270px;
+        --arena-top: 24px;
+        --arena-bottom: 28px;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        image-rendering: pixelated;
+      }
+      #result {
+        display: block;
+        white-space: pre-wrap;
+        padding: 14px 20px;
+        font: 14px/1.5 monospace;
+      }
+      p {
+        margin: 8px 20px;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>120-player render benchmark</h1>
+      <label
+        >Map
+        <select id="benchmark-map"></select
+      ></label>
+      <label
+        >Drawing
+        <select id="benchmark-drawing">
+          <option value="cached">Cached sprites</option>
+          <option value="direct">Direct sprites (comparison)</option>
+        </select></label
+      >
+      <label
+        >Scene
+        <select id="benchmark-scene">
+          <option value="cluster">120 visible together</option>
+          <option value="spread">120 spread across XXL</option>
+        </select></label
+      >
+      <button id="benchmark-start">Run 10-second sample</button>
+    </header>
+    <p>
+      Synthetic rendering fixture using the game renderer. Measures this browser/device, not server
+      capacity or network ping.
+    </p>
+    <div class="arena">
+      <canvas id="benchmark-canvas" aria-label="Synthetic 120-player arena"></canvas>
+    </div>
+    <output id="result" aria-live="polite">Ready. Includes two seconds of warm-up.</output>
+    <script type="module" src="./performance-lab.js"></script>
+  </body>
+</html>

@@ -1,4 +1,5 @@
 import { drawRaccoon, drawRide, drawData, TEAM } from './sprites.js';
+import { RaccoonSpriteCache } from './sprite-cache.js';
 import { getMapDefinition } from '../shared/maps.js';
 import {
   drawThemeBackground,
@@ -27,7 +28,7 @@ const random = (n) => {
 };
 
 export class Renderer {
-  constructor(canvas) {
+  constructor(canvas, { spriteCache = true } = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
     this.map = null;
@@ -47,6 +48,9 @@ export class Renderer {
     this.scale = 1;
     this.dead = false;
     this.shake = 0;
+    this.spriteCache = new RaccoonSpriteCache({ enabled: spriteCache });
+    this.backgroundLayer = null;
+    this.backgroundKey = '';
     this.onResize = () => this.resize();
     window.addEventListener('resize', this.onResize);
     this.resize();
@@ -58,7 +62,13 @@ export class Renderer {
   resize() {
     const r = this.canvas.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // HUD text stays native resolution. Pixel-art scenery does not need a
+    // 4K/retina-sized backing store: bound fill-rate and GPU memory on laptops.
+    const dpr = Math.min(
+      window.devicePixelRatio || 1,
+      2,
+      Math.sqrt(3_000_000 / (r.width * r.height)),
+    );
     this.canvas.width = Math.round(r.width * dpr);
     this.canvas.height = Math.round(r.height * dpr);
     const style = getComputedStyle(this.canvas.parentElement);
@@ -119,6 +129,7 @@ export class Renderer {
     this.cssScale = r.width / this.w;
     this.scale = this.canvas.width / this.w;
     this.ctx.imageSmoothingEnabled = false;
+    this.backgroundKey = '';
   }
   setMap(map) {
     this.map = map;
@@ -126,6 +137,8 @@ export class Renderer {
     this.particles = [];
     this.popups = [];
     this.smooth.clear();
+    this.spriteCache.clear();
+    this.backgroundKey = '';
     this.seenEvents.clear();
     this.resize();
   }
@@ -136,10 +149,15 @@ export class Renderer {
     this.state = state;
     this.localId = localId;
     this.received = performance.now();
+    const trackedIds = new Set((state.players || []).map((player) => player.id));
+    for (const id of this.smooth.keys()) if (!trackedIds.has(id)) this.smooth.delete(id);
     for (const e of state.events || []) {
       if (this.seenEvents.has(e.id)) continue;
       this.seenEvents.add(e.id);
       if (this.seenEvents.size > 500) this.seenEvents.delete(this.seenEvents.values().next().value);
+      // The activity feed still receives every event. Decorative particles
+      // only matter near this camera; remote battles must not consume frames.
+      if (!this.visible(e.x || 0, e.y || 0, 1, 1, 160)) continue;
       const color = TEAM[e.team || 0].main;
       for (let i = 0; i < (['kill', 'ko'].includes(e.type) ? 18 : 9); i++)
         this.particles.push({
@@ -170,6 +188,9 @@ export class Renderer {
     window.removeEventListener('resize', this.onResize);
     this.resizeObserver?.disconnect();
     this.dead = true;
+    this.spriteCache.clear();
+    if (this.backgroundLayer) this.backgroundLayer.width = this.backgroundLayer.height = 1;
+    this.backgroundLayer = null;
   }
   visible(x, y, w = 40, h = 40, margin = 100) {
     return (
@@ -282,6 +303,8 @@ export class Renderer {
       )
       .slice(0, 4);
     this.namedPlayers = new Set([this.localId, ...nearHumans.map((p) => p.id)]);
+    this.drawnPlayers = 0;
+    this.visiblePlayers = 0;
     for (const p of this.state?.players || []) {
       if (!p.alive) continue;
       let drawP = p;
@@ -296,6 +319,8 @@ export class Renderer {
         drawP = { ...p, x: sm.x, y: sm.y };
       }
       if (!this.visible(drawP.x, drawP.y, 30, 40)) continue;
+      this.drawnPlayers++;
+      if (this.visible(drawP.x, drawP.y, 30, 40, 0)) this.visiblePlayers++;
       this.player(c, drawP, now, p.id === this.localId);
     }
     if (rawLocal && !rawLocal.alive) {
@@ -340,13 +365,31 @@ export class Renderer {
     c.strokeRect(1, 1, this.w - 2, this.h - 2);
   }
   background(c) {
-    drawThemeBackground(c, {
-      mapId: this.map.mapId,
-      width: this.w,
-      height: this.h,
-      camera: this.camera,
-      mapHeight: this.map.height,
-    });
+    // Scenery is static in Classic. In scrolling arenas an eight-world-pixel
+    // camera bucket changes the farthest parallax layer by about one pixel.
+    // Reuse its raster between buckets instead of redrawing every tiny window.
+    const key = `${this.map.mapId}:${this.canvas.width}:${this.canvas.height}:${Math.round(this.camera.x / 8)}:${Math.round(this.camera.y / 8)}`;
+    if (!this.backgroundLayer) this.backgroundLayer = document.createElement('canvas');
+    const layer = this.backgroundLayer;
+    if (key !== this.backgroundKey) {
+      if (layer.width !== this.canvas.width) layer.width = this.canvas.width;
+      if (layer.height !== this.canvas.height) layer.height = this.canvas.height;
+      const context = layer.getContext('2d', { alpha: false });
+      context.setTransform(this.scale, 0, 0, this.scale, 0, 0);
+      context.imageSmoothingEnabled = false;
+      drawThemeBackground(context, {
+        mapId: this.map.mapId,
+        width: this.w,
+        height: this.h,
+        camera: this.camera,
+        mapHeight: this.map.height,
+      });
+      this.backgroundKey = key;
+    }
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(layer, 0, 0);
+    c.restore();
   }
   scenery(c) {
     drawThemeScenery(c, this.map, this.camera, this.w);
@@ -584,7 +627,7 @@ export class Renderer {
     c.globalAlpha = 1;
     const invulnerable = (p.invulnerableUntil || 0) > now;
     if (invulnerable) c.globalAlpha = 0.55 + Math.sin(this.elapsed * 22) * 0.2;
-    drawRaccoon(c, p, this.elapsed, { now, mapId: this.map.mapId });
+    this.spriteCache.draw(c, p, this.elapsed, { now, mapId: this.map.mapId });
     c.globalAlpha = 1;
     if ((p.attackUntil || 0) > now) {
       c.save();

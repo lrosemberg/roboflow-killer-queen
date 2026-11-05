@@ -121,6 +121,8 @@ The test suite covers physics, navigation across map variants, economic scaling,
 
 The balance benchmark runs real server matches with ordinary bots and passive test clients. It records outcomes and delivery timing; synthetic matches are samples, not promises of human match duration. Load tests are intended for a local or controlled staging server. A 120-slot configuration does not establish capacity on every host or network.
 
+See [performance measurements and reproduction commands](docs/PERFORMANCE.md) for the local 120-player server and renderer comparisons, bandwidth requirements, and Railway results with latency limitations.
+
 ## Source layout
 
 - `server.js`: authoritative simulation, rooms, bots, HTTP and WebSockets.

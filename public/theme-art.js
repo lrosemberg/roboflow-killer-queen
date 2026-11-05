@@ -1,4 +1,4 @@
-import { drawThemedRide } from './theme-sprites.js';
+import { drawThemedRide, TEAM_COLORS } from './theme-sprites.js';
 import { drawRaccoon } from './sprites.js';
 
 // Posters use the exact in-game Lenny atlas face, articulated limbs, striped
@@ -186,17 +186,88 @@ function bridge(c, x, y, s = 1) {
   }
   c.restore();
 }
-function empire(c, x, y) {
-  const color = '#67738e';
-  R(c, color, x - 46, y - 147, 92, 147);
-  R(c, color, x - 34, y - 183, 68, 40);
-  R(c, color, x - 23, y - 217, 46, 38);
-  R(c, color, x - 10, y - 244, 20, 30);
-  R(c, color, x - 2, y - 279, 4, 36);
-  c.globalAlpha = 0.6;
-  windows(c, x - 46, y - 146, 92, 143, '#efca91', 18);
-  R(c, '#f1cf9c', x - 4, y - 240, 8, 54);
-  c.globalAlpha = 1;
+function empire(c, x, y, scale = 1) {
+  c.save();
+  c.translate(x, y);
+  c.scale(scale, scale);
+  // Limestone setbacks, long vertical window bays, the illuminated Art Deco
+  // crown and its separate antenna make this unmistakably the Empire State.
+  const stone = '#a49ca4',
+    shade = '#76788f',
+    edge = '#c2b3ae';
+  for (const [w, top] of [
+    [104, -80],
+    [88, -130],
+    [70, -218],
+    [56, -241],
+    [40, -260],
+  ]) {
+    R(c, shade, -w / 2 - 2, top - 3, w + 4, -top + 3);
+    R(c, stone, -w / 2, top, w, -top);
+    R(c, edge, -w / 2, top, w, 3);
+    R(c, '#c0aeaa', -w / 2 + 3, top + 4, 3, -top - 4);
+    R(c, '#858298', w / 2 - 7, top + 4, 5, -top - 4);
+  }
+  for (const xx of [-26, -15, -4, 7, 18]) {
+    R(c, '#74788e', xx, -212, 6, 203);
+    for (let yy = -208; yy < -8; yy += 12) R(c, '#e2c58f', xx + 1, yy, 3, 5);
+  }
+  for (const xx of [-44, 36]) for (let yy = -121; yy < -7; yy += 13) R(c, '#e2c58f', xx, yy, 6, 5);
+  // The 86th-floor terrace and tapered mooring mast form two clear shoulders.
+  R(c, '#d9c09b', -31, -240, 62, 4);
+  R(c, '#b78e73', -17, -276, 34, 18);
+  R(c, '#f5d59a', -13, -276, 26, 17);
+  R(c, '#957e7b', -9, -290, 18, 14);
+  R(c, '#ffe4ae', -6, -290, 12, 14);
+  R(c, '#b9b5b3', -3, -315, 6, 25);
+  R(c, '#e9d4b7', -1, -336, 2, 24);
+  R(c, '#ffe8be', -4, -296, 8, 4);
+  c.restore();
+}
+function chrysler(c, x, y, scale = 1) {
+  c.save();
+  c.translate(x, y);
+  c.scale(scale, scale);
+  R(c, '#66728c', -34, -145, 68, 145);
+  R(c, '#8e9ca9', -29, -152, 58, 152);
+  R(c, '#bac1c1', -25, -161, 50, 11);
+  for (const xx of [-20, -7, 6, 19])
+    for (let yy = -142; yy < -7; yy += 15) R(c, '#dfca98', xx, yy, 4, 6);
+  // Receding stainless-steel arches and triangular windows, then the needle.
+  for (const [w, top] of [
+    [54, -165],
+    [44, -179],
+    [34, -193],
+    [24, -207],
+    [14, -221],
+  ]) {
+    P(c, '#c6d1cf', [
+      [-w / 2, top + 15],
+      [-w / 2, top + 5],
+      [0, top - 6],
+      [w / 2, top + 5],
+      [w / 2, top + 15],
+    ]);
+    R(c, '#7e91a2', -w / 2, top + 13, w, 3);
+    if (w > 20) {
+      P(c, '#56687f', [
+        [-w / 2 + 7, top + 10],
+        [-w / 2 + 10, top + 1],
+        [-w / 2 + 13, top + 10],
+      ]);
+      P(c, '#56687f', [
+        [w / 2 - 13, top + 10],
+        [w / 2 - 10, top + 1],
+        [w / 2 - 7, top + 10],
+      ]);
+    }
+  }
+  R(c, '#d4dfd8', -2, -252, 4, 29);
+  R(c, '#f3e0b6', -1, -264, 2, 14);
+  // The famous eagle shoulders extend beyond the shaft.
+  R(c, '#c5cecb', -43, -150, 16, 5);
+  R(c, '#c5cecb', 27, -150, 16, 5);
+  c.restore();
 }
 function mountain(c, x, y, w, h, color) {
   P(c, color, [
@@ -212,6 +283,127 @@ function mountain(c, x, y, w, h, color) {
     [x + w / 2, y],
   ]);
 }
+function sugarloaf(c, x, y, scale = 1) {
+  c.save();
+  c.translate(x, y);
+  c.scale(scale, scale);
+  // Pão de Açúcar is a rounded granite monolith rising straight from the bay,
+  // distinct from Corcovado's forested ridge and the smaller Morro da Urca.
+  P(c, '#879f98', [
+    [-100, 0],
+    [-74, -48],
+    [-59, -113],
+    [-45, -166],
+    [-30, -189],
+    [-12, -198],
+    [8, -199],
+    [28, -188],
+    [43, -166],
+    [51, -111],
+    [69, -49],
+    [92, 0],
+  ]);
+  P(c, '#a8b4a3', [
+    [-42, -164],
+    [-27, -186],
+    [-9, -193],
+    [7, -193],
+    [23, -182],
+    [34, -151],
+    [34, -94],
+    [49, -34],
+    [22, -12],
+    [4, -81],
+    [-7, -146],
+  ]);
+  P(c, '#769586', [
+    [-91, 0],
+    [-70, -35],
+    [-41, -48],
+    [-7, -31],
+    [27, -37],
+    [78, -18],
+    [92, 0],
+  ]);
+  // The Urca cableway and tiny suspended cabin make the familiar bay view clear.
+  P(c, '#7a9b8a', [
+    [-209, 0],
+    [-187, -68],
+    [-164, -91],
+    [-140, -97],
+    [-119, -76],
+    [-104, -29],
+    [-83, 0],
+  ]);
+  R(c, '#d8d3b5', -148, -100, 21, 6);
+  R(c, '#d8d3b5', -12, -201, 24, 5);
+  for (let i = 0; i <= 24; i++) {
+    const q = i / 24;
+    R(c, '#627e7c', -138 + 138 * q, -102 - 98 * q + Math.sin(q * Math.PI) * 10, 7, 1);
+  }
+  R(c, '#6e8382', -77, -151, 2, 11);
+  R(c, '#e0bd7f', -84, -140, 17, 11);
+  R(c, '#cee4d6', -81, -138, 11, 5);
+  R(c, '#708980', -83, -129, 15, 2);
+  c.restore();
+}
+function corcovado(c, x, y, scale = 1) {
+  c.save();
+  c.translate(x, y);
+  c.scale(scale, scale);
+  P(c, '#70988b', [
+    [-161, 0],
+    [-133, -42],
+    [-101, -58],
+    [-72, -108],
+    [-48, -140],
+    [-26, -190],
+    [-10, -198],
+    [11, -194],
+    [30, -158],
+    [50, -100],
+    [96, -48],
+    [125, 0],
+  ]);
+  P(c, '#88a697', [
+    [-113, -55],
+    [-70, -108],
+    [-46, -144],
+    [-24, -187],
+    [-11, -191],
+    [-22, -154],
+    [-52, -104],
+    [-73, -65],
+  ]);
+  // Christ the Redeemer on its own peak: visible head, outstretched arms,
+  // draped robe and plinth. The silhouette never sits on Sugarloaf itself.
+  R(c, '#537c7b', -8, -244, 12, 13);
+  R(c, '#d3d7bd', -6, -242, 8, 11);
+  R(c, '#587d7a', -34, -231, 64, 8);
+  R(c, '#d7dcc1', -32, -230, 60, 5);
+  R(c, '#b6c8b6', -34, -228, 7, 5);
+  R(c, '#b6c8b6', 24, -228, 7, 5);
+  P(c, '#587d7a', [
+    [-9, -231],
+    [5, -231],
+    [10, -204],
+    [14, -198],
+    [-17, -198],
+    [-12, -207],
+  ]);
+  P(c, '#c8d4bd', [
+    [-7, -230],
+    [3, -230],
+    [7, -205],
+    [10, -200],
+    [-13, -200],
+    [-9, -208],
+  ]);
+  R(c, '#ecedd0', -5, -224, 3, 23);
+  R(c, '#78948b', -18, -198, 33, 5);
+  R(c, '#bdc8af', -14, -199, 25, 3);
+  c.restore();
+}
 function marina(c, x, y) {
   for (const dx of [-91, -5, 81]) {
     R(c, '#7a95ab', x + dx, y - 175, 45, 175);
@@ -226,6 +418,12 @@ function marina(c, x, y) {
   ]);
   R(c, '#b4c6be', x - 100, y - 197, 232, 7);
   R(c, '#d5d8bd', x - 82, y - 200, 195, 4);
+  R(c, '#7bbcc2', x - 65, y - 201, 145, 3);
+  for (const dx of [-79, -39, 70, 106]) {
+    R(c, '#738f85', x + dx, y - 207, 2, 9);
+    R(c, '#86ac91', x + dx - 5, y - 209, 12, 3);
+    R(c, '#a9c6a3', x + dx - 3, y - 212, 8, 3);
+  }
 }
 function supertree(c, x, y, s = 1) {
   c.save();
@@ -239,6 +437,8 @@ function supertree(c, x, y, s = 1) {
   R(c, '#947994', -48, -139, 96, 6);
   R(c, '#d9b3c8', -28, -143, 56, 5);
   R(c, '#7fa99e', -35, -136, 70, 5);
+  R(c, '#dec2da', -36, -140, 72, 2);
+  for (const xx of [-30, -15, 0, 15, 30]) R(c, '#ecd9d4', xx, -134, 3, 3);
   for (const dx of [-41, -20, 20, 41])
     P(c, '#8f829c', [
       [dx, -126],
@@ -263,6 +463,11 @@ function artDeco(c, x, y, s = 1) {
   R(c, '#f4ddc6', -80, -126, 160, 5);
   R(c, '#a5bab6', -17, -146, 34, 15);
   R(c, '#a5bab6', -15, -28, 30, 28);
+  // Ocean Drive's pastel facades, narrow neon ribs and symmetrical roof fins.
+  R(c, '#dfa0b9', -24, -154, 3, 36);
+  R(c, '#dfa0b9', 21, -154, 3, 36);
+  R(c, '#f7e2c9', -9, -170, 18, 7);
+  R(c, '#b2d5c5', -5, -174, 10, 5);
   c.restore();
 }
 
@@ -303,7 +508,7 @@ export function drawThemeBackground(
   }
   if (mapId === 'brazil') {
     for (let i = -1; i < Math.ceil(width / 470) + 1; i++)
-      mountain(c, i * 470 - camera.x * 0.08, horizon, 610, 180 + random(i + 11) * 100, p.far);
+      mountain(c, i * 470 - camera.x * 0.08, horizon, 610, 65 + random(i + 11) * 55, p.far);
   }
   skyline(c, width, horizon, camera.x, p.far, 1, mapId === 'new-york' ? 170 : 100, p.light);
   const anchor = width * 0.54 - ((camera.x * 0.07) % 1400);
@@ -311,23 +516,15 @@ export function drawThemeBackground(
     if (x < -440 || x > width + 440) continue;
     if (mapId === 'san-francisco') bridge(c, x, horizon - 5, 0.9);
     else if (mapId === 'new-york') {
-      empire(c, x, horizon);
-      empire(c, x + 430, horizon + 35);
+      // Keep the entire spire in view even in compact map cards. Different
+      // landmarks replace the former pair of identical generic towers.
+      const landmarkScale = Math.min(1.15, Math.max(0.55, (horizon - 30) / 336));
+      empire(c, x - 34, horizon, landmarkScale);
+      chrysler(c, x + 235, horizon + 8, landmarkScale * 0.91);
     } else if (mapId === 'brazil') {
-      mountain(c, x - 100, horizon + 8, 330, 254, '#729e91');
-      mountain(c, x + 145, horizon + 10, 280, 176, '#6b978c');
-      // Rio's familiar hilltop silhouette makes the destination specific.
-      const statueX = x + 153,
-        statueY = horizon - 166;
-      R(c, '#a7bcb0', statueX - 4, statueY - 34, 8, 11);
-      R(c, '#b5c7b8', statueX - 24, statueY - 22, 48, 5);
-      P(c, '#a7bcb0', [
-        [statueX - 5, statueY - 23],
-        [statueX + 5, statueY - 23],
-        [statueX + 10, statueY],
-        [statueX - 10, statueY],
-      ]);
-      R(c, '#a7bcb0', statueX - 13, statueY, 26, 5);
+      const landmarkScale = Math.min(1.2, Math.max(0.65, (horizon - 20) / 244));
+      corcovado(c, x - 175, horizon + 3, landmarkScale);
+      sugarloaf(c, x + 171, horizon + 4, landmarkScale);
     } else if (mapId === 'singapore') {
       marina(c, x, horizon);
       supertree(c, x + 266, horizon, 0.8);
@@ -480,9 +677,7 @@ export function drawFinishGates(c, map, camera = { x: 0 }, viewWidth = map.width
     [1, track.x2],
   ]) {
     if (x < camera.x - 90 || x > camera.x + viewWidth + 90) continue;
-    const main = team ? '#ff7d91' : '#a78bfa';
-    const pale = team ? '#ffdfd0' : '#eee0ff';
-    const dark = team ? '#6b3558' : '#4e3b7c';
+    const { main, light: pale, dark } = TEAM_COLORS[team];
     c.save();
     for (const dx of [-49, 45]) {
       R(c, '#30374b', x + dx - 2, floor - 99, 8, 99);
@@ -560,8 +755,7 @@ export function drawFinishLabels(c, map, camera = { x: 0 }, viewWidth = map.widt
     [1, map.gatorTrack.x2],
   ]) {
     if (x < camera.x - 75 || x > camera.x + viewWidth + 75) continue;
-    const main = team ? '#ff7d91' : '#a78bfa';
-    const dark = team ? '#6b3558' : '#4e3b7c';
+    const { main, dark } = TEAM_COLORS[team];
     c.save();
     c.translate(x, floor + 40);
     const size = Math.max(1, 1.2 / cssScale);

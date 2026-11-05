@@ -1,13 +1,19 @@
 // Small, deterministic pixel sprites. Kept as source so their silhouettes stay
 // crisp at every camera scale and animation never requires a texture upload.
-import { drawQueenAccessory, drawThemedRide } from './theme-sprites.js';
+import {
+  drawQueenAccessory,
+  drawThemedRide,
+  drawRideTeamMark,
+  TEAM_COLORS,
+} from './theme-sprites.js';
 export const TEAM = [
-  { main: '#a78bfa', light: '#ede3ff', dark: '#6540b2', ink: '#322552', name: 'PURPLE PIXELS' },
-  { main: '#ff7d91', light: '#ffd6c9', dark: '#ad375f', ink: '#532d50', name: 'SUNSET SYNDICATE' },
+  { ...TEAM_COLORS[0], name: 'PURPLE PIXELS', mark: 'stripe' },
+  { ...TEAM_COLORS[1], name: 'SUNSET SYNDICATE', mark: 'bars' },
 ];
 
 const atlas = new Image();
 atlas.src = new URL('./assets/lenny-sprites-purple.png', import.meta.url).href;
+export const isSpriteAtlasReady = () => Boolean(atlas.complete && atlas.naturalWidth);
 const frames = {
   aquaIdle: [24, 202, 256, 316],
   aquaRun: [324, 202, 275, 307],
@@ -78,15 +84,20 @@ function arm(ctx, x, y, swing, team, front) {
   pixelLine(ctx, '#262c45', x, y, handX, handY, 6);
   pixelLine(ctx, front ? '#aab2c4' : '#727c98', x, y, handX, handY, 4);
   rect(ctx, team.main, x - 3, y - 3, 6, 5);
+  rect(ctx, team.light, x - 3, y + 1, 6, 2);
   rect(ctx, '#262c45', Math.round(handX - 3), Math.round(handY - 1), 6, 4);
   return { x: handX, y: handY };
 }
 function shirt(ctx, team) {
-  rect(ctx, '#262b43', -10, -25, 21, 16);
-  rect(ctx, team.main, -8, -24, 17, 13);
-  rect(ctx, team.light, -7, -23, 3, 7);
-  rect(ctx, team.dark, 6, -20, 3, 9);
-  rect(ctx, '#454d65', -8, -11, 17, 4);
+  rect(ctx, team.ink, -11, -25, 24, 17);
+  rect(ctx, team.main, -9, -24, 21, 14);
+  rect(ctx, team.dark, 8, -21, 4, 11);
+  if (team.mark === 'stripe') rect(ctx, team.light, -8, -23, 3, 10);
+  else {
+    rect(ctx, team.light, -9, -22, 5, 2);
+    rect(ctx, team.light, -9, -18, 5, 2);
+  }
+  rect(ctx, '#454d65', -8, -10, 18, 4);
   // Roboflow's pixel R monogram, visible even in the tiny gameplay sprite.
   rect(ctx, '#fffaf4', -3, -21, 2, 8);
   rect(ctx, '#fffaf4', -1, -21, 5, 2);
@@ -176,6 +187,10 @@ function articulatedRaccoon(ctx, p, t, options, team) {
     rect(ctx, team.main, -22 + flutter, -20, 15, 9);
     rect(ctx, team.main, -25 + flutter, -12, 12, 7);
     rect(ctx, team.light, -20 + flutter, -19, 3, 9);
+    if (team.mark === 'bars') {
+      rect(ctx, team.light, -22 + flutter, -17, 13, 2);
+      rect(ctx, team.light, -24 + flutter, -12, 12, 2);
+    }
     if (airborne) {
       const flap = Math.round(Math.sin(t * 18) * 5);
       pixelLine(ctx, team.dark, -9, -25, -26, -26 + flap, 7);
@@ -280,6 +295,7 @@ export function drawGator(ctx, gator, t, team = null) {
     ctx.clip();
     atlasFrame(ctx, frames.gator, 0, 20 + bob, 58);
     ctx.restore();
+    drawRideTeamMark(ctx, team);
     ctx.restore();
     return;
   }
@@ -323,6 +339,7 @@ export function drawGator(ctx, gator, t, team = null) {
   rect(ctx, '#fff0bd', -14, -14, 28, 3);
   rect(ctx, '#9e5b62', 13, -29, 4, 18);
   rect(ctx, '#fff0bd', 14, -27, 2, 10);
+  drawRideTeamMark(ctx, team);
   ctx.restore();
 }
 

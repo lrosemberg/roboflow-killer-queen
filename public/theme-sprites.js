@@ -5,6 +5,12 @@ const R = (c, color, x, y, w, h) => {
   c.fillRect(Math.round(x), Math.round(y), Math.ceil(w), Math.ceil(h));
 };
 const INK = '#252c44';
+export const TEAM_COLORS = Object.freeze([
+  Object.freeze({ main: '#8b4ef3', light: '#f1e6ff', dark: '#5522a3', ink: '#2b1749' }),
+  Object.freeze({ main: '#ff8b45', light: '#fff0c2', dark: '#b9451f', ink: '#51231f' }),
+]);
+const rideColors = (team) =>
+  TEAM_COLORS[team] || { main: '#d9be80', light: '#fff0cf', dark: '#6b6258', ink: INK };
 function pixelEllipse(c, color, x, y, rx, ry) {
   for (let yy = -ry; yy <= ry; yy += 3) {
     const span = Math.sqrt(Math.max(0, 1 - (yy / ry) ** 2)) * rx;
@@ -17,7 +23,7 @@ function eye(c, x, y) {
   R(c, '#ffffff', x + 5, y + 1, 2, 2);
 }
 function saddle(c, team) {
-  const color = team === 1 ? '#ff7d91' : '#a78bfa';
+  const color = rideColors(team).main;
   R(c, INK, -21, -25, 39, 8);
   R(c, color, -18, -25, 33, 5);
   R(c, '#fff1c8', -16, -25, 29, 2);
@@ -26,67 +32,75 @@ function saddle(c, team) {
 }
 
 export function drawQueenAccessory(c, mapId = 'miami', t = 0) {
-  // The gold three-point crown is the shared role signal. City details stay
-  // behind/alongside it, above the face, and never recolor a team's shirt.
+  // A low, fitted tiara sits between Lenny's ears. City details are jewelry,
+  // never another helmet layered over the face or a towering skyline hat.
   if (mapId === 'san-francisco') {
-    R(c, '#613747', -14, -60, 6, 14);
-    R(c, '#ec7958', -13, -61, 4, 14);
-    R(c, '#613747', 10, -60, 6, 14);
-    R(c, '#ec7958', 11, -61, 4, 14);
-    for (let x = -8; x < 11; x += 3)
-      R(c, '#ec7958', x, -55 + Math.round((1 - Math.abs(x) / 11) * 3), 3, 2);
-    R(c, '#ffe1aa', -13, -59, 4, 2);
-    R(c, '#ffe1aa', 11, -59, 4, 2);
+    // A tiny International Orange cable drapes beside the gold crown.
+    R(c, '#a24435', -10, -51, 3, 6);
+    R(c, '#ed8057', -10, -51, 2, 4);
+    R(c, '#a24435', 12, -51, 3, 6);
+    R(c, '#ed8057', 13, -51, 2, 4);
+    R(c, '#ed8057', -8, -48, 4, 2);
+    R(c, '#ed8057', 9, -48, 4, 2);
   } else if (mapId === 'new-york') {
     for (const [x, y, w, h] of [
-      [-18, -52, 8, 3],
-      [-14, -59, 4, 9],
-      [-6, -63, 3, 12],
-      [3, -64, 3, 13],
-      [11, -59, 4, 9],
-      [15, -52, 8, 3],
+      [-13, -49, 6, 2],
+      [-10, -54, 3, 6],
+      [-3, -58, 2, 8],
+      [5, -58, 2, 8],
+      [12, -54, 3, 6],
+      [14, -49, 6, 2],
     ])
       R(c, '#68d7c1', x, y, w, h);
-    R(c, '#227d80', -12, -50, 29, 5);
+    R(c, '#227d80', -9, -47, 24, 3);
   } else if (mapId === 'brazil') {
     for (const [x, y, color] of [
-      [-16, -61, '#42c395'],
-      [-9, -66, '#57d6c7'],
-      [-2, -69, '#ffb951'],
-      [5, -65, '#ef83b9'],
-      [12, -60, '#49c297'],
+      [-9, -54, '#42c395'],
+      [-4, -58, '#57d6c7'],
+      [1, -60, '#ffb951'],
+      [6, -57, '#ef83b9'],
+      [11, -53, '#49c297'],
     ]) {
       const sway = Math.round(Math.sin(t * 4 + x) * 1);
-      R(c, '#294752', x + sway, y, 6, 17);
-      R(c, color, x + 1 + sway, y + 1, 4, 13);
-      R(c, '#fff3b6', x + 2 + sway, y + 5, 1, 7);
+      R(c, '#294752', x + sway, y, 4, 10);
+      R(c, color, x + 1 + sway, y + 1, 2, 8);
+      R(c, '#fff3b6', x + 1 + sway, y + 3, 1, 4);
     }
   } else if (mapId === 'singapore') {
-    R(c, '#315b63', 13, -58, 3, 13);
+    R(c, '#315b63', 12, -51, 2, 7);
     for (const [x, y] of [
-      [9, -59],
-      [15, -59],
-      [12, -63],
-      [12, -55],
+      [8, -52],
+      [13, -52],
+      [11, -55],
+      [11, -49],
     ])
-      R(c, '#e577bb', x, y, 6, 5);
-    R(c, '#fff2bc', 13, -58, 4, 4);
-    R(c, '#7ed5b8', 9, -49, 8, 3);
+      R(c, '#e577bb', x, y, 4, 3);
+    R(c, '#fff2bc', 12, -51, 2, 2);
+    R(c, '#7ed5b8', 11, -46, 6, 2);
   } else {
-    R(c, '#e777a4', 10, -57, 7, 7);
-    R(c, '#ef8db3', 7, -54, 13, 4);
-    R(c, '#fff0ad', 12, -54, 3, 3);
-    R(c, '#ffd57d', -13, -60, 3, 6);
-    R(c, '#ffd57d', -18, -56, 5, 2);
+    R(c, '#e777a4', 10, -53, 5, 5);
+    R(c, '#ef8db3', 8, -51, 9, 3);
+    R(c, '#fff0ad', 11, -51, 2, 2);
+    R(c, '#ffd57d', -10, -54, 2, 4);
+    R(c, '#ffd57d', -13, -51, 4, 2);
   }
-  R(c, INK, -10, -54, 24, 8);
-  R(c, '#f9bf58', -9, -54, 22, 6);
-  for (const x of [-9, 0, 9]) {
-    R(c, INK, x - 1, -59, 5, 7);
-    R(c, '#ffdf86', x, -58, 3, 8);
+  R(c, INK, -8, -48, 21, 4);
+  R(c, '#d99135', -7, -47, 19, 2);
+  for (const [x, y] of [
+    [-6, -52],
+    [1, -54],
+    [8, -52],
+  ]) {
+    // Taper the points into the band; square uprights read as a helmet.
+    R(c, INK, x, y - 1, 3, 3);
+    R(c, INK, x - 1, y + 1, 5, 3);
+    R(c, INK, x - 2, y + 3, 7, -45 - y - 3);
+    R(c, '#ffdf86', x + 1, y, 1, 3);
+    R(c, '#ffdf86', x, y + 2, 3, 3);
+    R(c, '#ffdf86', x - 1, y + 4, 5, -46 - y - 4);
   }
-  R(c, '#fff4c2', -8, -50, 20, 2);
-  R(c, '#a56ee4', 1, -53, 3, 3);
+  R(c, '#fff4c2', -6, -46, 17, 1);
+  R(c, '#d5546e', 2, -48, 2, 2);
 }
 
 export function drawThemedRide(c, ride, t, team = null, mapId = 'miami') {
@@ -106,27 +120,59 @@ export function drawThemedRide(c, ride, t, team = null, mapId = 'miami') {
   };
   c.translate(0, bob);
   if (mapId === 'san-francisco') {
-    wheel(-37, 12, 10);
-    wheel(37, 12, 10);
-    R(c, INK, -62, -24, 124, 36);
-    R(c, '#c17256', -59, -21, 118, 29);
-    R(c, '#efd59b', -57, -20, 114, 17);
-    R(c, '#8c493f', -55, -2, 110, 10);
-    for (const x of [-48, -22, 16, 42]) {
-      R(c, '#476574', x, -18, 19, 13);
-      R(c, '#c9d4c4', x + 2, -16, 4, 9);
+    // Powell-style cable car: enclosed saloon at the rear, open grip section
+    // ahead, brass poles, wooden benches and an outboard running board.
+    wheel(-35, 13, 8);
+    wheel(35, 13, 8);
+    R(c, INK, -58, 1, 116, 11);
+    R(c, '#7b3030', -56, -2, 112, 11);
+    R(c, '#b74538', -54, -1, 108, 7);
+    R(c, '#edc585', -56, 6, 112, 3);
+    // The front half is open: do not fill it with dark bus windows.
+    R(c, INK, -57, -26, 54, 28);
+    R(c, '#f1dbab', -54, -24, 48, 26);
+    for (const x of [-49, -29]) {
+      R(c, '#6f463c', x, -22, 17, 17);
+      R(c, '#476d77', x + 2, -20, 13, 13);
+      R(c, '#b6d3ca', x + 3, -19, 4, 10);
+      R(c, '#d8b574', x - 1, -4, 19, 3);
     }
-    R(c, '#efd59b', -3, -20, 15, 28);
-    R(c, '#8c493f', 1, -17, 7, 23);
-    R(c, INK, -67, -29, 134, 6);
-    R(c, '#d89b68', -64, -29, 128, 3);
-    R(c, '#f5dfaf', -65, 4, 130, 3);
-    R(c, INK, -69, 9, 138, 4);
-    R(c, '#f6d57d', 59, -10, 7, 7);
-    R(c, '#7c4c46', -63, -9, 5, 6);
-    R(c, '#4b4d5c', -37, -39, 7, 10);
-    R(c, '#e7c578', -39, -40, 11, 6);
-    R(c, '#e1bf88', -46, -1, 18, 5);
+    for (const x of [3, 21, 40]) {
+      R(c, '#5a3f35', x, -10, 17, 10);
+      R(c, '#a87243', x + 1, -9, 15, 3);
+      R(c, '#d6a35f', x - 1, -3, 18, 3);
+      R(c, '#613c32', x + 2, 0, 3, 5);
+    }
+    for (const x of [-60, -5, 25, 56]) {
+      R(c, '#654732', x, -26, 4, 30);
+      R(c, '#efd090', x + 1, -25, 2, 28);
+    }
+    // Two-tier overhanging roof and cream route fascia.
+    R(c, INK, -66, -31, 132, 7);
+    R(c, '#31534f', -63, -33, 126, 6);
+    R(c, '#638079', -54, -36, 108, 4);
+    R(c, '#1d3f3d', -45, -39, 90, 4);
+    R(c, '#f5deb1', -60, -27, 120, 3);
+    // Narrow steps and handrails read as a cable car, rather than a city bus.
+    R(c, INK, -65, 10, 130, 5);
+    R(c, '#c09456', -62, 10, 124, 2);
+    R(c, '#fff0c8', -60, 8, 120, 2);
+    R(c, '#f0d095', 59, -12, 3, 20);
+    R(c, '#f0d095', 53, -12, 8, 3);
+    R(c, '#825f37', 42, -26, 3, 8);
+    R(c, '#f1c66c', 39, -21, 9, 4);
+    R(c, '#fff0b5', 61, -6, 6, 6);
+    R(c, '#b13d36', -64, -2, 4, 5);
+    // Decorative route lettering remains upright when travelling left.
+    c.save();
+    c.translate(-29, 2);
+    if (team === 0) c.scale(-1, 1);
+    c.fillStyle = '#fff1c8';
+    c.font = 'bold 5px monospace';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('POWELL', 0, 0);
+    c.restore();
   } else if (mapId === 'new-york') {
     wheel(-45, 13, 8);
     wheel(-18, 13, 8);
@@ -233,9 +279,19 @@ export function drawThemedRide(c, ride, t, team = null, mapId = 'miami') {
     for (const x of [42, 55]) R(c, '#fff0c9', x, 5, 5, 5);
   }
   if (mapId === 'miami' || mapId === 'brazil') saddle(c, team);
-  // The team pennant stays identical across rides, including passenger vehicles.
-  const flag = team === 1 ? '#ff7d91' : '#a78bfa';
-  R(c, INK, -11, -32, 26, 6);
-  R(c, flag, -9, -31, 22, 3);
+  drawRideTeamMark(c, team);
   c.restore();
+}
+
+export function drawRideTeamMark(c, team) {
+  // A broad team plaque and a shape mark survive small camera scales. Purple
+  // uses a vertical stripe; Sunset uses two horizontal bars in addition to hue.
+  const colors = rideColors(team);
+  R(c, colors.ink, -13, -7, 29, 14);
+  R(c, colors.main, -11, -5, 25, 10);
+  if (team === 0) R(c, colors.light, 0, -4, 3, 8);
+  else if (team === 1) {
+    R(c, colors.light, -2, -3, 9, 2);
+    R(c, colors.light, -2, 1, 9, 2);
+  } else R(c, colors.light, 0, -2, 4, 4);
 }

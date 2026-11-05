@@ -1,6 +1,6 @@
 # Generated pixel art
 
-Created with the built-in `image_gen` tool. Original raster files were copied into the project without editing.
+The original raster artwork below was created with the built-in `image_gen` tool. Original raster files were retained. The later RoboQueen destination artwork combines code-drawn scenery with the existing Lenny atlas, as documented at the end of this file.
 
 ## Miami hero
 
@@ -65,3 +65,27 @@ Built-in `image_gen` edits; original assets retained. All edited outputs visuall
 > Image2 is PRODUCT REFERENCE ONLY: the Roboflow AI1 industrial camera.
 > Make ONE targeted edit in Image1: replace the generic cyan rocket backpack worn by the flying sunglasses raccoon in the UPPER RIGHT with a recognizable PIXEL-ART ROBOfLOW AI1 CAMERA backpack based on Image2. The new backpack has a chunky black rectangular industrial body; square front lens panel with a big round black lens surrounded by eight small white LEDs; purple vertical side stripe marked tiny AI1 if readable; lower black cooling fins. Face the camera lens slightly toward the viewer so the product identity is recognizable. Mount camera on the raccoon's back, approximately the old rocket's size or only slightly larger for readability. Keep the orange jet flame below as whimsical game propulsion.
 > Preserve all other Image1 content exactly:1536x1024canvas, full composition and framing, raccoon pose and size, sunglasses, coral shirt with white R, gray fur, every other raccoon and purple/coral shirt, crocodile, crown, ocean, palms, sunset, art deco buildings and all pixel-art details. The ONLY changed region is the flying raccoon's backpack and its immediate flame connection. No new text except tiny AI1 on the backpack. Keep crisp16-bit pixel art, no photographic patch, no giant camera elsewhere.
+
+## RoboQueen destination artwork
+
+The five destinations use Canvas pixel-art scenery and cosmetic layers from `public/theme-art.js` and `public/theme-sprites.js`, shared by Classic and XXL. These additions were drawn in code; no new image-generation prompt was used.
+
+| Destination             | Scenery                                          | Ride                                                 | Queen accessory     |
+| ----------------------- | ------------------------------------------------ | ---------------------------------------------------- | ------------------- |
+| Miami                   | Sunset, Art Deco buildings, palms                | Gator                                                | Sunburst and flower |
+| San Francisco           | Golden Gate Bridge, fog, Painted Ladies          | Cable Car                                            | Bridge crown        |
+| New York                | Night skyline, skyscrapers, water towers         | Subway                                               | Liberty spikes      |
+| Brazil / Rio de Janeiro | Coastal hills, hilltop statue, tropical greenery | Delivery Bike with the user-requested iFood backpack | Carnival feathers   |
+| Singapore               | Marina Bay skyline, Supertrees, waterfront       | Riverboat                                            | Orchid              |
+
+Team colors, Lenny's face, articulated limbs, striped tail and AI1 backpack remain consistent. Posters call the actual `drawRaccoon` implementation rather than a separate simplified character. `public/assets/lenny-poster-head.png` is an unaltered face crop from `lenny-sprites-purple.png` at **x=70, y=203, width=210, height=166**. The original atlas remains unchanged. SVG exports embed this crop once and reuse it for their characters.
+
+Purple and Sunset finish arches, flags and checker stripes align with the authoritative `gatorTrack.x1` and `gatorTrack.x2` positions. They are visual markers only; ride physics, collision bounds and the rider's feet anchor at `ride.y - 22` remain unchanged.
+
+Regenerate the six 640 × 360 map cards (including the locked Next Onsite card) and the 960 × 640 global hero with:
+
+```sh
+node scripts/render-theme-art.mjs
+```
+
+Outputs are `public/assets/maps/*.svg` and `public/assets/roboqueen-hero.svg`. Update the shared art modules first, then rerun the exporter. If the source face crop changes, update `lenny-poster-head.png` and the exporter's crop contract together. Review PNGs were rendered from these SVGs with `rsvg-convert`; copies for sharing are in the sibling `outputs/roboqueen-assets/` directory.

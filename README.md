@@ -1,10 +1,10 @@
-# Roboflow Killer Queen — Lenny’s Miami Mayhem
+# RoboQueen
 
-A multiplayer browser arcade with Miami pixel art, Roboflow-themed raccoons, AI1 upgrade stations, and a crocodile getaway. Play Classic with up to 10 players or explore a scrolling XXL city with up to 120. The interface is in English.
+A multiplayer browser arcade starring Lenny and the Roboflow raccoons. Pick an onsite or hub destination, bring your crew, and win through data collection, Queen combat, or a themed getaway ride. Play Classic with up to 10 players or explore a scrolling XXL arena with up to 120. The interface is in English.
 
 **[Play online](https://roboflow-killer-queen.up.railway.app/)**
 
-![Lenny’s Miami Mayhem](public/assets/miami-hero-ai1.png)
+![RoboQueen](public/assets/roboqueen-hero.svg)
 
 ## Run on your laptop
 
@@ -15,7 +15,7 @@ npm ci
 npm start
 ```
 
-Open **http://localhost:8787**. On macOS, you can also open `Start Miami Mayhem.command`.
+Open **http://localhost:8787**. On macOS, you can also open `Start RoboQueen.command`.
 
 For development with automatic server restarts:
 
@@ -31,6 +31,22 @@ The home page’s **Play on your network** button lists LAN addresses. Invitatio
 
 Change the port with `PORT=9000 npm start`. Local and hosted servers have independent rooms.
 
+## Destinations
+
+Choose a destination independently from the arena size. Every destination has a **Classic (5 vs 5)** and **XXL (up to 60 vs 60)** layout, its own scenery, Queen accessories, and getaway ride:
+
+| Destination             | Scene                                         | Getaway       |
+| ----------------------- | --------------------------------------------- | ------------- |
+| Miami                   | Art Deco, pastel sunset and palms             | Crocodile     |
+| San Francisco           | Golden Gate, fog and painted houses           | Cable car     |
+| New York                | Night skyline, water towers and amber windows | Subway        |
+| Brazil · Rio de Janeiro | Tropical hills and wave-pattern boardwalk     | Delivery bike |
+| Singapore               | Marina skyline, Supertrees and garden lights  | Riverboat     |
+
+The room leader selects the destination when creating a room and can change it in the waiting lobby. Everyone receives the same arena. Active rounds keep their chosen map. **Next Onsite · Coming soon** is a preview placeholder, not a selectable unfinished map.
+
+To add a destination, follow the [map recipe](docs/MAP-RECIPE.md). Preview layouts and character variants at **http://localhost:8787/map-workshop.html** after starting the server. This workshop uses labeled visual fixtures; it is not a live match.
+
 ## Rooms and teams
 
 - Home offers **Create a room** and **Join a room**, an editable player name, and open rooms.
@@ -44,13 +60,13 @@ Change the port with `PORT=9000 npm start`. Local and hosted servers have indepe
 
 ## Three ways to win
 
-1. **Economic:** workers carry one Roboflow chip at a time from finite supply piles to their own HQ doorway. The team target is `ceil(12 × total participants / 10)`, counting humans and bots. That is 12 chips per team at 10 players, 24 at 20, and 144 at 120. Total arena stock is six chips per participant. Targets are fixed when the round begins.
+1. **Economic:** workers carry one Roboflow chip at a time from finite supply piles to their own HQ doorway. The team target is `max(12, ceil(12 × total participants / 10))`, counting humans and bots. That is a minimum of 12 chips per team for up to 10 participants, 24 at 20, and 144 at 120. Total arena stock is `max(60, 6 × participants)`, leaving enough chips for deliveries and upgrades even in small rooms. Targets are fixed when the round begins.
 2. **Military:** eliminate every opposing Queen’s three lives. A defeated Warrior returns as a Worker; Workers have unlimited respawns.
-3. **Gator:** a Worker rides the crocodile to their team’s goal. Enemies can defeat the rider and take it back.
+3. **Getaway:** a Worker rides the destination’s ride to their team’s goal. Enemies can defeat the rider and take it back.
 
-Workers can spend a carried chip at a neutral or friendly AI1 station to gain Warrior wings or speed. Queens claim stations by touching them. Upgrading requires remaining still inside the machine. Queens and Warriors cannot collect chips or ride the crocodile.
+Workers can spend a carried chip at a neutral or friendly AI1 station to gain Warrior wings or speed. Queens claim stations by touching them. Upgrading requires remaining still inside the machine. Queens and Warriors cannot collect chips or ride the getaway ride.
 
-The Classic arena is 1,440 × 820, with grouped stockpiles, elevated HQs and a mirrored zig-zag climb. Workers must travel between supplies and the vault instead of repeating a short local loop. An uninterrupted crocodile ride from center takes 70 seconds, or about 47 seconds with an earned speed upgrade. A limited number of armed bots respond to opponents nearing an economic or gator victory; Queens retreat from unsafe fights and nearby warriors can protect a threatened Queen. XXL is 12,000 × 2,000 with a following camera. Player bodies do not create walls: teammates can pass through one another, and armed enemy contact uses combat rules.
+The Classic arena is 1,440 × 820, with grouped stockpiles, elevated HQs and a mirrored zig-zag climb. Workers must travel between supplies and the vault instead of repeating a short local loop. An uninterrupted getaway ride from center takes 70 seconds, or about 47 seconds with an earned speed upgrade. A limited number of armed bots respond to opponents nearing an economic or gator victory; Queens retreat from unsafe fights and nearby warriors can protect a threatened Queen. XXL is 12,000 × 2,000 with a following camera. Player bodies do not create walls: teammates can pass through one another, and armed enemy contact uses combat rules.
 
 See [pacing changes and measured match samples](docs/BALANCE.md).
 
@@ -60,7 +76,7 @@ See [pacing changes and measured match samples](docs/BALANCE.md).
 | ---------------------------------- | ---------------------------- |
 | Move                               | A / D or left / right arrows |
 | Jump; hold to fly as Queen/Warrior | Space / W / up arrow         |
-| AI1 station or crocodile           | E / J                        |
+| AI1 station or getaway             | E / J                        |
 | Queen dive / drop through platform | S / down; Shift also dives   |
 | Role guide                         | R                            |
 | Crew names and scores              | Hold Tab                     |
@@ -89,24 +105,26 @@ For temporary testing, if Cloudflare’s `cloudflared` CLI is already installed,
 ## Test and measure
 
 ```sh
+npm run format:check
 npm test
 node scripts/internet-smoke.mjs http://localhost:8787
+node scripts/map-smoke.mjs http://localhost:8787
 node scripts/bot-balance-benchmark.mjs normal
 node scripts/pacing-benchmark.mjs --help
 node scripts/pacing-benchmark.mjs natural
 npm run loadtest
 ```
 
-The test suite covers physics, navigation, economic scaling, lobby authorization/team capacity, bot decisions, combat, touch input, gestures, and network state. GitHub Actions runs it on Node 22 and 24.
+The test suite covers physics, navigation across map variants, economic scaling, map selection authorization, lobby/team capacity, bot decisions, combat, touch input, gestures, and network state. GitHub Actions runs it on Node 22 and 24.
 
 The balance benchmark runs real server matches with ordinary bots and passive test clients. It records outcomes and delivery timing; synthetic matches are samples, not promises of human match duration. Load tests are intended for a local or controlled staging server. A 120-slot configuration does not establish capacity on every host or network.
 
 ## Source layout
 
 - `server.js`: authoritative simulation, rooms, bots, HTTP and WebSockets.
-- `shared/`: physics, maps, navigation, protocol, input buffering and lobby rules.
+- `shared/`: destination catalog, layout recipes, physics, navigation, protocol, input buffering and lobby rules.
 - `public/`: browser rendering, menus, mobile controls, pixel assets and fonts.
 - `test/`: Node test suite.
 - `scripts/`: network, load and balance measurement tools.
 
-No build step or database is required. Local session metadata, deployment credentials, generated test reports and `node_modules` are excluded from Git. Bundled fonts retain their license files. This is a fan-made arcade adaptation with custom XXL rules, not the original Killer Queen game.
+Run `npm run format` before committing; CI checks formatting with Prettier. No build step or database is required. Local session metadata, deployment credentials, generated test reports and `node_modules` are excluded from Git. Bundled fonts retain their license files. This is a fan-made arcade adaptation with custom XXL rules, not the original Killer Queen game.

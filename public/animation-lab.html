@@ -2,11 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Meet the Night Crew · Miami Mayhem</title>
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <title>Meet the Night Crew · RoboQueen</title>
     <style>
       * {
         box-sizing: border-box;
+        touch-action: pan-x pan-y;
       }
       body {
         margin: 0;
@@ -44,6 +48,13 @@
         margin: auto;
         padding: 0 24px 20px;
       }
+      select {
+        padding: 10px 14px;
+        color: #f8f3e5;
+        background: #28223d;
+        border: 1px solid #76638d;
+        font: 600 14px system-ui;
+      }
       button {
         font:
           600 12px ui-monospace,
@@ -80,9 +91,13 @@
         <h1>Meet the Night Crew</h1>
         <p>Purple Pixels × Sunset Syndicate. Powered by AI1. Fueled by questionable decisions.</p>
       </div>
-      <a href="/">Back to Miami Mayhem →</a>
+      <a href="/">Back to RoboQueen →</a>
     </header>
     <nav aria-label="Animation state">
+      <label
+        >Destination
+        <select id="lab-map" aria-label="Destination"></select
+      ></label>
       <button data-state="walk" class="active">Walk · 8 frames</button
       ><button data-state="idle">Idle</button><button data-state="flight">Jump / AI1 flight</button
       ><button data-state="attack">Attack</button><button id="flip">Face left</button
@@ -91,11 +106,25 @@
     <canvas
       width="1200"
       height="840"
-      aria-label="Six animated Lenny raccoons: purple and coral workers, captains and warriors, plus walking crocodile."
+      aria-label="Six animated Lenny raccoons: purple and coral workers, captains and warriors, plus the destination’s animated getaway ride."
     ></canvas>
-    <footer>Lenny’s Miami Mayhem · Collect the data. Protect the crown. Catch a crocodile.</footer>
+    <footer>RoboQueen · Collect the data. Protect the crown. Ride together.</footer>
     <script type="module">
-      import { drawRaccoon, drawGator, TEAM } from './sprites.js';
+      import { drawRaccoon, drawRide, TEAM } from './sprites.js';
+      import { PLAYABLE_MAPS, getMapDefinition } from '../shared/maps.js';
+      import { bindPageGestureGuard } from './gesture-guard.js';
+      bindPageGestureGuard();
+      const mapSelect = document.querySelector('#lab-map');
+      for (const map of PLAYABLE_MAPS) {
+        const option = document.createElement('option');
+        option.value = map.id;
+        option.textContent = map.name;
+        mapSelect.append(option);
+      }
+      let mapId = 'miami';
+      mapSelect.onchange = () => {
+        mapId = mapSelect.value;
+      };
       const canvas = document.querySelector('canvas'),
         c = canvas.getContext('2d');
       let mode = 'walk',
@@ -168,7 +197,7 @@
               carrying: role === 0 && mode === 'idle',
               attackUntil: mode === 'attack' ? 10000 + (1 - ((elapsed * 2) % 1)) * 180 : 0,
             };
-            drawRaccoon(c, player, elapsed, { scale: 5.25, now: 10000 });
+            drawRaccoon(c, player, elapsed, { scale: 3.8, now: 10000, mapId });
             label(
               mode === 'walk' ? '● ● ● ● ● ● ● ●' : mode.toUpperCase(),
               center,
@@ -179,20 +208,27 @@
           }
         c.fillStyle = '#223a35';
         c.fillRect(12, 548, 776, 276);
-        label('GATOR TAXI · YOUR RIDE IS HERE', 400, 581, 15, '#bce39a');
+        label(
+          getMapDefinition(mapId).ride.name.toUpperCase() + ' · YOUR RIDE IS HERE',
+          400,
+          581,
+          15,
+          '#bce39a',
+        );
         c.save();
         c.translate(395, 712);
         c.scale(3, 3);
-        drawGator(
+        drawRide(
           c,
           { x: 0, y: 0, riderId: mode === 'idle' ? null : 'lab' },
           elapsed,
           facing === 1 ? 1 : 0,
+          mapId,
         );
         c.restore();
         c.fillStyle = '#5a7060';
         c.fillRect(48, 773, 706, 2);
-        label('Zero emissions. Questionable temperament.', 400, 803, 12, '#b8d2c2');
+        label('Same speed. Local flavor.', 400, 803, 12, '#b8d2c2');
         c.fillStyle = '#27213c';
         c.fillRect(812, 548, 376, 276);
         label('WALK CYCLE', 1000, 581, 15, '#c9b0fc');
@@ -212,7 +248,7 @@
               facing: 1,
             },
             i / 14,
-            { scale: 1.9, now: 10000 },
+            { scale: 1.9, now: 10000, mapId },
           );
           label(String(i + 1), x, y + 18, 10, '#c7bcd6');
         }

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+    />
+    <title>Map Workshop · RoboQueen</title>
+    <link rel="stylesheet" href="./fonts.css" />
+    <link rel="stylesheet" href="./map-workshop.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">ROBOQUEEN · CREATOR TOOLS</p>
+        <h1>Map workshop.</h1>
+      </div>
+      <a href="/">Back to the arcade ↗</a>
+    </header>
+    <main>
+      <p class="intro">
+        Explore the real arena renderer, layout and themed crew. These are visual fixtures, not a
+        live match. Geometry, stock and Queen quotas come from the same map factory as the game.
+      </p>
+      <section class="controls" aria-label="Preview settings">
+        <label>DESTINATION<select id="workshop-map"></select></label>
+        <label
+          >ARENA<select id="workshop-mode">
+            <option value="normal">Classic · 10 players</option>
+            <option value="xxl">XXL · 120 players</option>
+          </select></label
+        >
+        <label id="camera-control" hidden
+          >XXL CAMERA POSITION<input
+            id="workshop-camera"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value="50"
+        /></label>
+        <button id="workshop-pause" aria-pressed="false">Pause animation</button>
+      </section>
+      <section class="preview" aria-labelledby="destination-title">
+        <div class="preview-heading">
+          <div>
+            <p id="destination-kicker" class="eyebrow"></p>
+            <h2 id="destination-title"></h2>
+          </div>
+          <span id="destination-size"></span>
+        </div>
+        <div class="arena">
+          <canvas id="arena-canvas" role="img" aria-label="Map layout preview"></canvas>
+        </div>
+        <p id="workshop-stats" class="stats" aria-live="polite"></p>
+      </section>
+      <section class="crew-preview" aria-labelledby="crew-heading">
+        <h2 id="crew-heading">Same crew. Local flavor.</h2>
+        <p id="crew-description"></p>
+        <canvas
+          id="crew-canvas"
+          width="1000"
+          height="250"
+          role="img"
+          aria-label="Both team Queens and the themed getaway ride"
+        ></canvas>
+      </section>
+      <p class="note">
+        Team colors, collision sizes and objective rules stay the same in every destination. New
+        artwork must preserve readable landing edges and silhouettes.
+      </p>
+    </main>
+    <script type="module" src="./map-workshop.js"></script>
+  </body>
+</html>

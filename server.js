@@ -19,6 +19,7 @@ import { queuePlayerInput, consumePlayerInput, resetPlayerInput } from './shared
 import { getLobbyReadiness } from './shared/lobby.js';
 import { createBotStrategy, queenRetreatTarget, isQueenGateSafe } from './shared/bot-strategy.js';
 import { getGatorSpeed } from './shared/pacing.js';
+import { getMapDefinition, isMapId, normalizeMapId } from './shared/maps.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const NO_INPUT = Object.freeze({
@@ -157,6 +158,9 @@ export function createGameServer({
         code: r.code,
         name: r.name,
         mode: r.mode,
+        mapId: r.mapId,
+        mapName: r.map.name,
+        mapRevision: r.mapRevision,
         players: humans(r).length,
         bots: bots(r).length,
         botDifficulty: r.botDifficulty,
@@ -176,7 +180,7 @@ export function createGameServer({
       if (url.pathname === '/api/health')
         return json(res, 200, {
           ok: true,
-          version: '1.0.0',
+          version: '1.1.0',
           rooms: rooms.size,
           players: clients.size,
           uptime: Math.round((Date.now() - startedAt) / 1000),
@@ -243,7 +247,9 @@ export function createGameServer({
   const snapshotSending = new WeakSet();
   const send = (socket, data) => {
     if (socket?.readyState === WebSocket.OPEN && socket.bufferedAmount < 256 * 1024)
-      socket.send(JSON.stringify(data), { compress: data.type === 'joined' });
+      socket.send(JSON.stringify(data), {
+        compress: ['joined', 'map-changed'].includes(data.type),
+      });
   };
   const error = (client, message) => send(client.socket, { type: 'error', message });
   const broadcastRooms = () => {
@@ -531,6 +537,32 @@ export function createGameServer({
     );
     broadcastRooms();
   }
+  function selectMap(c, r, mapId) {
+    if (!r || c.id !== r.hostId) return error(c, 'Only the host can change the map.');
+    if (r.status !== 'waiting') return error(c, 'Change maps in the next round lobby.');
+    if (!isMapId(mapId)) return error(c, 'Choose an available map.');
+    if (r.mapId === mapId) return;
+    r.mapId = mapId;
+    r.mapRevision++;
+    r.map = createMap(r.mode, r.players.size, mapId);
+    r.navigation = createNavigator(r.map);
+    r.botStrategy = null;
+    resetRound(r, 'waiting');
+    const message = {
+      type: 'map-changed',
+      map: r.map,
+      mapId,
+      mapName: r.map.name,
+      mapRevision: r.mapRevision,
+      players: [...r.players.values()].map(publicPlayer),
+    };
+    for (const client of clients.values())
+      if (client.roomCode === r.code) {
+        send(client.socket, message);
+        sendSnapshot(r, client);
+      }
+    broadcastRooms();
+  }
   function resetEconomy(r) {
     // Lobby previews follow the roster; once countdown starts these values and
     // the finite stock stay locked until the next round, even for late joins.
@@ -597,6 +629,9 @@ export function createGameServer({
     if (rooms.size >= maxRooms) return error(c, 'All server rooms are busy. Try an existing room.');
     if (msg.botDifficulty !== undefined && !BOT_DIFFICULTIES.includes(msg.botDifficulty))
       return error(c, 'Choose Easy, Normal or Hard bot difficulty.');
+    if (msg.mapId !== undefined && !isMapId(msg.mapId)) return error(c, 'Choose an available map.');
+    const mapId = normalizeMapId(msg.mapId),
+      definition = getMapDefinition(mapId);
     leaveRoom(c);
     let code;
     do {
@@ -613,7 +648,7 @@ export function createGameServer({
           : 9;
     const r = {
       code,
-      name: clean(msg.roomName, mode === 'xxl' ? 'Mega Miami Mayhem' : 'Ocean Drive Showdown', 32),
+      name: clean(msg.roomName, `${definition.subtitle}${mode === 'xxl' ? ' XXL' : ''}`, 32),
       mode,
       maxPlayers,
       private: Boolean(msg.private),
@@ -621,7 +656,9 @@ export function createGameServer({
       botDifficulty: msg.botDifficulty || 'normal',
       hostId: c.id,
       players: new Map(),
-      map: createMap(mode),
+      mapId,
+      mapRevision: 0,
+      map: createMap(mode, undefined, mapId),
       status: 'waiting',
       tick: 0,
       events: [],
@@ -679,6 +716,9 @@ export function createGameServer({
       room: {
         name: r.name,
         mode: r.mode,
+        mapId: r.mapId,
+        mapName: r.map.name,
+        mapRevision: r.mapRevision,
         maxPlayers: r.maxPlayers,
         private: r.private,
         botTarget: r.botTarget,
@@ -760,6 +800,9 @@ export function createGameServer({
       type: 'state',
       time: now,
       tick: r.tick,
+      mapId: r.mapId,
+      mapName: r.map.name,
+      mapRevision: r.mapRevision,
       gator: r.gator,
       scores: r.scores,
       scoreTarget: r.map.scoreTarget,
@@ -839,7 +882,7 @@ export function createGameServer({
     const reason = {
       economic: 'ECONOMIC VICTORY · Dataset complete',
       military: 'MILITARY VICTORY · All rival Queens eliminated',
-      gator: 'GATOR VICTORY · Crocodile delivered',
+      gator: `RIDE VICTORY · ${r.map.ride.name} delivered`,
     }[type];
     r.status = 'ended';
     r.winner = team;
@@ -1228,7 +1271,9 @@ export function createGameServer({
           Math.abs(p.y + 24 - r.gator.y) < 80
         ) {
           r.gator.riderId = p.id;
-          event(r, 'ride', p.x, p.y, p.team, 'CHOMP CHOMP, LET’S GO!', { actor: eventPlayer(p) });
+          event(r, 'ride', p.x, p.y, p.team, `${r.map.ride.name.toUpperCase()} EXPRESS!`, {
+            actor: eventPlayer(p),
+          });
         }
       }
       // E can animate the sword; actual combat uses facing, contact and height.
@@ -1342,6 +1387,10 @@ export function createGameServer({
         broadcastRooms();
         return;
       }
+      if (msg.type === 'map') {
+        selectMap(c, r, msg.mapId);
+        return;
+      }
       if (msg.type === 'bot-difficulty') {
         if (!r || c.id !== r.hostId) return error(c, 'Only the host can change bot difficulty.');
         if (r.status === 'playing') return error(c, 'Change bot difficulty between rounds.');
@@ -1389,11 +1438,15 @@ export function createGameServer({
         if (!room) return error(c, 'Room not found. Check the six-character code.');
         return joinRoom(c, room, msg.name, msg.role);
       }
+      if (msg.mapId !== undefined && !isMapId(msg.mapId))
+        return error(c, 'Choose an available map.');
+      const mapId = normalizeMapId(msg.mapId);
       const mode = msg.mode === 'xxl' ? 'xxl' : 'normal';
       const room = [...rooms.values()].find(
         (q) =>
           !q.private &&
           q.mode === mode &&
+          q.mapId === mapId &&
           q.status === 'playing' &&
           humans(q).length < q.maxPlayers,
       );
@@ -1490,7 +1543,7 @@ export function createGameServer({
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const game = createGameServer();
   const address = await game.listen();
-  console.log(`MIAMI MAYHEM is live · http://localhost:${address.port}`);
+  console.log(`ROBOFLOW RUMBLE is live · http://localhost:${address.port}`);
   for (const n of Object.values(networkInterfaces()).flat())
     if (n?.family === 'IPv4' && !n.internal)
       console.log(`LAN · http://${n.address}:${address.port}`);

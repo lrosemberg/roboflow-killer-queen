@@ -1,3 +1,5 @@
+import { DEFAULT_MAP_ID, getMapDefinition } from './maps.js';
+
 export const PLAYER_W = 28;
 export const PLAYER_H = 36;
 export const SPEED = 270;
@@ -33,143 +35,183 @@ export function configureMapEconomy(map, total) {
   return map;
 }
 
-export function createMap(mode = 'normal', totalPlayers) {
+// Deterministic, mirrored Classic recipes. Coordinates are gameplay geometry;
+// the renderer supplies each city's scenery without affecting collisions.
+const LAYOUTS = {
+  miami: {
+    steps: [
+      [20, 632, 220],
+      [330, 524, 220],
+      [20, 416, 220],
+      [330, 308, 220],
+    ],
+    home: 140,
+    roof: [90, 290],
+    center: [590, 260],
+    bridge: [630, 180],
+    ground: [560, 660, 780, 880],
+    raised: [670, 770],
+    xxl: { spacing: 470, stagger: 215, widths: [275, 295, 315], offset: 70 },
+  },
+  'san-francisco': {
+    steps: [
+      [30, 632, 230],
+      [320, 524, 260],
+      [70, 416, 180],
+      [310, 308, 270],
+    ],
+    home: 120,
+    roof: [70, 280],
+    center: [570, 300],
+    bridge: [610, 220],
+    ground: [540, 660, 780, 900],
+    raised: [665, 775],
+    xxl: { spacing: 450, stagger: 190, widths: [260, 290, 320], offset: 60 },
+  },
+  'new-york': {
+    steps: [
+      [0, 630, 200],
+      [290, 521, 200],
+      [60, 414, 170],
+      [320, 307, 190],
+    ],
+    home: 140,
+    roof: [90, 290],
+    center: [600, 240],
+    bridge: [630, 180],
+    ground: [560, 665, 775, 880],
+    raised: [670, 770],
+    xxl: { spacing: 430, stagger: 200, widths: [235, 255, 275], offset: 85 },
+  },
+  brazil: {
+    steps: [
+      [40, 632, 220],
+      [310, 524, 210],
+      [0, 416, 250],
+      [330, 308, 240],
+    ],
+    home: 160,
+    roof: [110, 290],
+    center: [590, 260],
+    bridge: [630, 180],
+    ground: [570, 670, 770, 870],
+    raised: [670, 770],
+    xxl: { spacing: 500, stagger: 235, widths: [315, 335, 355], offset: 45 },
+  },
+  singapore: {
+    steps: [
+      [20, 628, 220],
+      [340, 520, 220],
+      [40, 412, 220],
+      [350, 306, 220],
+    ],
+    home: 130,
+    roof: [80, 280],
+    center: [580, 280],
+    bridge: [640, 160],
+    ground: [550, 660, 780, 890],
+    raised: [670, 770],
+    xxl: { spacing: 460, stagger: 210, widths: [275, 295, 315], offset: 65 },
+  },
+};
+
+export function createMap(mode = 'normal', totalPlayers, mapId = DEFAULT_MAP_ID) {
   mode = mode === 'xxl' ? 'xxl' : 'normal';
+  const definition = getMapDefinition(mapId),
+    layout = LAYOUTS[definition.id];
   const width = mode === 'xxl' ? 12000 : 1440;
   const height = mode === 'xxl' ? 2000 : 820;
   const floor = height - 80;
   const platforms = [{ x: 0, y: floor, w: width, h: 80, kind: 'ground' }];
+  const ledge = (x, y, w, kind = 'neon') => platforms.push({ x, y, w, h: 22, kind });
+  const mirrored = (x, y, w, kind) => {
+    ledge(x, y, w, kind);
+    ledge(width - x - w, y, w, kind);
+  };
   if (mode === 'normal') {
-    // Alternating outer/inner ledges make collection a visible delivery route.
-    // Each 108px climb is reachable with the ordinary worker jump; skipping
-    // a tier would require 216px, above that jump's apex. Both teams mirror.
-    for (const [x, y, w] of [
-      [20, 632, 220],
-      [1200, 632, 220],
-      [330, 524, 220],
-      [890, 524, 220],
-      [20, 416, 220],
-      [1200, 416, 220],
-      [330, 308, 220],
-      [890, 308, 220],
-      [90, 200, 290],
-      [590, 200, 260],
-      [1060, 200, 290],
-      [630, 632, 180],
-    ]) {
-      platforms.push({ x, y, w, h: 22, kind: y === 200 ? 'roof' : 'neon' });
-    }
+    // Consecutive rises are 106–112px. Skipping a tier exceeds the worker's
+    // jump apex, so every city's return route retains its alternating climb.
+    for (const [x, y, w] of layout.steps) mirrored(x, y, w);
+    mirrored(layout.roof[0], 200, layout.roof[1], 'roof');
+    ledge(layout.center[0], 200, layout.center[1], 'roof');
+    ledge(layout.bridge[0], layout.steps[0][1], layout.bridge[1]);
   } else {
+    const { spacing, stagger, widths, offset } = layout.xxl;
     for (let row = 0; row < 7; row++) {
-      const y = floor - 180 * (row + 1);
-      for (let x = 70 + (row % 2) * 215; x < width - 250; x += 470) {
-        platforms.push({
-          x,
-          y,
-          w: Math.min(width - x, 275 + (row % 3) * 20),
-          h: 22,
-          kind: row % 2 ? 'roof' : 'neon',
-        });
+      const y = floor - 180 * (row + 1),
+        w = widths[row % widths.length],
+        kind = row % 2 ? 'roof' : 'neon';
+      if (definition.id === DEFAULT_MAP_ID) {
+        // Preserve the existing Miami XXL arena for old rooms and links.
+        for (let x = offset + (row % 2) * stagger; x < width - 250; x += spacing)
+          ledge(x, y, Math.min(width - x, w), kind);
+      } else {
+        // Other districts mirror their entire skyline, including the center.
+        for (let x = offset + (row % 2) * stagger; x + w <= width / 2 - 50; x += spacing)
+          mirrored(x, y, w, kind);
+        ledge(width / 2 - 120, y, 240, kind);
       }
     }
-    platforms.push(
-      { x: 90, y: floor - 540, w: 290, h: 22, kind: 'roof' },
-      { x: width - 380, y: floor - 540, w: 290, h: 22, kind: 'roof' },
-    );
+    mirrored(90, floor - 540, 290, 'roof');
   }
-  const hiveFloor = floor - 540;
+  const hiveFloor = floor - 540,
+    homeX = mode === 'normal' ? layout.home : 140;
   const bases = [
-    { x: 140, y: hiveFloor - 130, w: 180, h: 130, team: 0 },
-    { x: width - 320, y: hiveFloor - 130, w: 180, h: 130, team: 1 },
+    { x: homeX, y: hiveFloor - 130, w: 180, h: 130, team: 0 },
+    { x: width - homeX - 180, y: hiveFloor - 130, w: 180, h: 130, team: 1 },
   ];
   for (const base of bases)
     base.door = { x: base.x + base.w / 2 - 28, y: hiveFloor - 64, w: 56, h: 64 };
-  const gates =
-    mode === 'normal'
-      ? [
-          { id: 0, kind: 'warrior', x: 400, y: 218, w: 70, h: 90, team: null },
-          { id: 1, kind: 'warrior', x: 970, y: 218, w: 70, h: 90, team: null },
-          { id: 2, kind: 'warrior', x: 685, y: 110, w: 70, h: 90, team: null },
-          { id: 3, kind: 'speed', x: 100, y: 542, w: 70, h: 90, team: null },
-          { id: 4, kind: 'speed', x: 1270, y: 542, w: 70, h: 90, team: null },
-        ]
-      : [
-          {
-            id: 0,
-            kind: 'warrior',
-            x: Math.round(width * 0.28),
-            y: floor - 90,
-            w: 70,
-            h: 90,
-            team: null,
-          },
-          {
-            id: 1,
-            kind: 'warrior',
-            x: Math.round(width * 0.72) - 70,
-            y: floor - 90,
-            w: 70,
-            h: 90,
-            team: null,
-          },
-          {
-            id: 2,
-            kind: 'warrior',
-            x: Math.round(width * 0.5) - 35,
-            y: floor - 90,
-            w: 70,
-            h: 90,
-            team: null,
-          },
-          {
-            id: 3,
-            kind: 'speed',
-            x: Math.round(width * 0.18),
-            y: floor - 90,
-            w: 70,
-            h: 90,
-            team: null,
-          },
-          {
-            id: 4,
-            kind: 'speed',
-            x: Math.round(width * 0.82) - 70,
-            y: floor - 90,
-            w: 70,
-            h: 90,
-            team: null,
-          },
-        ];
-  // Finite grouped stockpiles at defined, reachable pickup spots.
+  const gates = [];
+  const gate = (kind, x, y) =>
+    gates.push({ id: gates.length, kind, x, y, w: 70, h: 90, team: null });
+  if (mode === 'normal') {
+    const wings = layout.steps[3],
+      speed = layout.steps[0];
+    // Miami retains its original station coordinates; others center machines
+    // on their own ledges and mirror them exactly across the arena.
+    const wingX = definition.id === DEFAULT_MAP_ID ? 400 : Math.round(wings[0] + wings[2] / 2 - 35);
+    const speedX =
+      definition.id === DEFAULT_MAP_ID ? 100 : Math.round(speed[0] + speed[2] / 2 - 35);
+    gate('warrior', wingX, wings[1] - 90);
+    gate('warrior', width - wingX - 70, wings[1] - 90);
+    gate('warrior', width / 2 - 35, 110);
+    gate('speed', speedX, speed[1] - 90);
+    gate('speed', width - speedX - 70, speed[1] - 90);
+  } else {
+    const offset = PLAYGROUND_OFFSETS[definition.id];
+    gate('warrior', Math.round(width * offset.wings), floor - 90);
+    gate('warrior', Math.round(width * (1 - offset.wings)) - 70, floor - 90);
+    gate('warrior', width / 2 - 35, floor - 90);
+    gate('speed', Math.round(width * offset.speed), floor - 90);
+    gate('speed', Math.round(width * (1 - offset.speed)) - 70, floor - 90);
+  }
   const berryPiles = [];
   const addPile = (x, y) => berryPiles.push({ id: berryPiles.length, x, y });
-  const groundFractions =
-    mode === 'xxl'
-      ? [0.22, 0.32, 0.44, 0.56, 0.68, 0.78]
-      : [560 / width, 660 / width, 780 / width, 880 / width];
-  for (const fraction of groundFractions) addPile(Math.round(width * fraction), floor - 24);
-  // XXL keeps twelve separate collection points across the central districts,
-  // rather than a safe resource loop immediately beside each home base.
-  const raisedFractions =
-    mode === 'xxl' ? [0.2, 0.3, 0.42, 0.58, 0.7, 0.8] : [670 / width, 770 / width];
-  for (const [index, fraction] of raisedFractions.entries()) {
-    const levelY = mode === 'normal' ? 632 : floor - 180;
-    const ledge = platforms
-      .filter((p) => p.y === levelY)
-      .sort(
-        (a, b) =>
-          Math.abs(a.x + a.w / 2 - width * fraction) - Math.abs(b.x + b.w / 2 - width * fraction),
-      )[0];
-    addPile(
-      mode === 'normal' ? Math.round(width * fraction) : Math.round(ledge.x + ledge.w / 2),
-      ledge.y - 22,
-    );
+  if (mode === 'normal') {
+    for (const x of layout.ground) addPile(x, floor - 24);
+    for (const x of layout.raised) addPile(x, layout.steps[0][1] - 22);
+  } else {
+    for (const fraction of [0.22, 0.32, 0.44, 0.56, 0.68, 0.78])
+      addPile(Math.round(width * fraction), floor - 24);
+    for (const fraction of [0.2, 0.3, 0.42, 0.58, 0.7, 0.8]) {
+      const target = width * fraction;
+      const support = platforms
+        .filter((p) => p.y === floor - 180)
+        .sort((a, b) => Math.abs(a.x + a.w / 2 - target) - Math.abs(b.x + b.w / 2 - target))[0];
+      addPile(Math.round(support.x + support.w / 2), support.y - 22);
+    }
   }
   return configureMapEconomy(
     {
       width,
       height,
       mode,
+      mapId: definition.id,
+      name: definition.name,
+      subtitle: definition.subtitle,
+      ride: definition.ride,
+      queen: definition.queen,
       platforms,
       bases,
       gates,
@@ -184,6 +226,13 @@ export function createMap(mode = 'normal', totalPlayers) {
     totalPlayers ?? (mode === 'xxl' ? 120 : 10),
   );
 }
+const PLAYGROUND_OFFSETS = {
+  miami: { wings: 0.28, speed: 0.18 },
+  'san-francisco': { wings: 0.3, speed: 0.19 },
+  'new-york': { wings: 0.26, speed: 0.17 },
+  brazil: { wings: 0.32, speed: 0.2 },
+  singapore: { wings: 0.29, speed: 0.18 },
+};
 
 export function movePlayer(p, input, map, dt, now) {
   if (!p.alive) return p;

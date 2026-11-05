@@ -1,4 +1,4 @@
-# Miami Mayhem integration contract
+# Roboflow Rumble integration contract
 
 Node ESM server, vanilla browser ESM and Canvas2D. Default `PORT=8787`, bind `0.0.0.0`; static `public/` and `/shared/`. `ws` is the runtime dependency; `railway` is a development-only infrastructure SDK. The authoritative server runs 60 Hz simulation and 20 Hz snapshots, caches shared JSON fragments, keeps one snapshot in flight per socket, and culls distant players/loose chips in XXL.
 
@@ -14,11 +14,12 @@ Browsers negotiate `/ws?protocol=compact-v1`. Compact `state` packets carry `enc
 
 Client messages:
 
-- `create`: `{type:'create',name,roomName,mode:'normal'|'xxl',private,botCount,botDifficulty:'easy'|'normal'|'hard',role:'queen'|'worker'}`. Legacy `bots:boolean` is accepted when `botCount` is absent.
-- `join`: `{type:'join',code,name,role?}`; `quick`: `{type:'quick',name,mode,role?,botDifficulty?}` (difficulty applies if a new room is created).
+- `create`: `{type:'create',name,roomName,mode:'normal'|'xxl',mapId?,private,botCount,botDifficulty:'easy'|'normal'|'hard',role:'queen'|'worker'}`. Legacy `bots:boolean` is accepted when `botCount` is absent.
+- `join`: `{type:'join',code,name,role?}`; `quick`: `{type:'quick',name,mode,mapId?,role?,botDifficulty?}` (difficulty applies if a new room is created).
 - `input`: `{type:'input',seq,left,right,jump,action,dash,down}`. Sequence must be a nonnegative safe integer newer than the acknowledged input. `dash` means airborne Queen dive; other roles have no generic dash.
 - `role`: `{type:'role',role:'queen'|'worker'}` in `waiting`/`ended` only.
 - `team`: `{type:'team',team:0|1}` in `waiting` only. A full side can yield a bot seat; humans are never evicted.
+- `map`: `{type:'map',mapId}` from the leader in `waiting` only. The destination must be available in the catalog. Changing it rebuilds geometry and navigation, resets the waiting arena, preserves participants, and advances `mapRevision`.
 - `bots`: `{type:'bots',count}` from host between rounds only.
 - `bot-difficulty`: `{type:'bot-difficulty',difficulty:'easy'|'normal'|'hard'}` from host between rounds only. Default is `normal`; difficulty changes tactical cadence and pressure, never physical movement, lives, or resources.
 - `start`, `rematch`, `leave`; `ping` with `time`; `emote` with `emoji:'GG'|'HEY'|'LOL'`.
@@ -26,22 +27,29 @@ Client messages:
 Server messages:
 
 - `welcome`: `{type:'welcome',id}`.
-- `rooms`: public room summaries with `code,name,mode,players,bots,botDifficulty,maxPlayers,status,private`.
-- `joined`: `{type:'joined',id,code,hostId,map,room:{name,mode,maxPlayers,private,botTarget,botDifficulty},players}`.
-- `state`: `{type:'state',time,tick,ack,players,berries,piles,gates,gator,scores,scoreTarget,resourceCount,economyPlayerCount,queenLives,queenQuota,queensRemaining,status,startsAt,countdownUntil,winner,winType,winReason,victory,events,playerCount,botCount,configuredBots,botDifficulty,hostId,elapsedSeconds,remaining:null,lobbyPlayers?}`.
+- `rooms`: public room summaries with `code,name,mode,mapId,mapName,mapRevision,players,bots,botDifficulty,maxPlayers,status,private`.
+- `joined`: `{type:'joined',id,code,hostId,map,room:{name,mode,mapId,mapName,mapRevision,maxPlayers,private,botTarget,botDifficulty},players}`.
+- `map-changed`: `{type:'map-changed',map,mapId,mapName,mapRevision,players}`. Sent once per destination change to every room member before a fresh snapshot. Clients replace renderer geometry and clear prediction/input correction, animation state and stale activity events. Preferences and input sequence numbers remain intact.
+- `state`: `{type:'state',time,tick,mapId,mapName,mapRevision,ack,players,berries,piles,gates,gator,scores,scoreTarget,resourceCount,economyPlayerCount,queenLives,queenQuota,queensRemaining,status,startsAt,countdownUntil,winner,winType,winReason,victory,events,playerCount,botCount,configuredBots,botDifficulty,hostId,elapsedSeconds,remaining:null,lobbyPlayers?}`.
 - `left`; `error` with `message`; `pong` echoing `time`.
 
 `time` is server epoch milliseconds; animation/channel times use the same clock. The client estimates clock offset. `elapsedSeconds` freezes at victory and is zero in a waiting lobby. `startsAt` and `countdownUntil` are the same server epoch timestamp (zero in a waiting lobby); clients derive the opening 3–2–1–GO display from it. `remaining` is always `null`: no round-duration countdown or timeout winner exists.
 
 `queenLives:[n,n]` is aggregate remaining lives. `queenQuota:[n,n]` is the authoritative slot count; `queensRemaining:[n,n]` counts Queen slots with at least one life. During active play, these include disconnected/forfeited slots correctly. `lobbyPlayers` contains a compact full roster (`id,name,team,role,bot`) only while waiting or ended; active XXL `players` is interest-culled. Physics fields are sent only in `players`, avoiding duplicate full-player data in a crowded lobby.
 
+## Destination catalog
+
+`shared/maps.js` is the source for names, descriptions, preview assets, availability, Queen cosmetics and getaway identity. Available IDs are `miami`, `san-francisco`, `new-york`, `brazil` and `singapore`. `next-onsite` is a coming-soon card and is rejected by room creation and map changes. Omitted map IDs default to Miami for older clients. Unknown explicitly submitted IDs are rejected.
+
+Size and destination are independent. Each playable catalog entry must provide distinct, navigable Classic and XXL layouts. Map changes are leader-only in the waiting lobby; countdown, active rounds and results preserve the selected destination. The wire protocol retains `gator` and `winType:'gator'` for all getaway creatures; these names describe one objective mechanic, not a required crocodile skin. The recipe and release checks live in [docs/MAP-RECIPE.md](docs/MAP-RECIPE.md).
+
 ## World data
 
-`map` contains `width,height,mode,platforms,bases,gates,berryPiles,berrySpawns,gatorTrack,scoreTarget,resourceCount,economyPlayerCount`. Positions of platforms/bases/gates are top-left. Economic capacity is proportional to the total human-plus-bot roster: `scoreTarget = ceil(12 * players / 10)` and `resourceCount = 6 * players` (empty configuration uses a one-chip target and six-chip stock). Full rooms need 12 chips per team for 10 players or 144 for 120; their total stock is 60 or 720. There are six supply piles in Classic and twelve in XXL. Waiting-roster changes refresh this configuration; countdown, active play and results freeze it until the next lobby. Snapshots repeat `scoreTarget`, `resourceCount` and `economyPlayerCount`; the client synchronizes its joined map before drawing HUD, vault cells or results. `SCORE_TARGETS` holds full-capacity defaults, not a live room target. Classic is a 1,440 × 820 arena shown in one view on larger displays and with a following camera on small mobile viewports; XXL remains a 12,000 × 2,000 scrolling world. `map.berryPile` is a compatibility alias for the first pile.
+`map` contains `width,height,mode,mapId,name,subtitle,ride,queen,platforms,bases,gates,berryPiles,berrySpawns,gatorTrack,scoreTarget,resourceCount,economyPlayerCount`. Positions of platforms/bases/gates are top-left. Economic capacity is proportional to the total human-plus-bot roster: `scoreTarget = ceil(12 * players / 10)` and `resourceCount = 6 * players` (empty configuration uses a one-chip target and six-chip stock). Full rooms need 12 chips per team for 10 players or 144 for 120; their total stock is 60 or 720. There are six supply piles in Classic and twelve in XXL. Waiting-roster changes refresh this configuration; countdown, active play and results freeze it until the next lobby. Snapshots repeat `scoreTarget`, `resourceCount` and `economyPlayerCount`; the client synchronizes its joined map before drawing HUD, vault cells or results. `SCORE_TARGETS` holds full-capacity defaults, not a live room target. Classic is a 1,440 × 820 arena shown in one view on larger displays and with a following camera on small mobile viewports; XXL remains a 12,000 × 2,000 scrolling world. `map.berryPile` is a compatibility alias for the first pile.
 
 - Bases: `{x,y,w,h,team,door:{x,y,w,h}}`. Both HQs stand on platforms 540 world pixels above the ground. Deposits require the Worker to be grounded at the visible door.
 - Gates: `{id,kind:'warrior'|'speed',x,y,w,h,team:null|0|1}`. Map gates start neutral; `state.gates` contains live ownership.
-- Piles: `{id,x,y}` in the map; `{id,x,y,remaining}` in snapshots. Classic has four ground piles at x=560/660/780/880 and two on the central y=632 bridge at x=670/770. Mirrored zig-zag ledges rise in 108px steps to the HQs. XXL distributes 12 piles through the central 60% of the city, keeping a collection journey from either HQ.
+- Piles: `{id,x,y}` in the map; `{id,x,y,remaining}` in snapshots. Each Classic layout has four central ground piles and two bridge piles. Miami uses ground x=560/660/780/880 and bridge x=670/770 at y=632; the other recipes vary coordinates. Mirrored zig-zag ledges rise approximately 108px per step to the HQs. XXL distributes 12 piles through the central 60% of the city, keeping a collection journey from either HQ.
 - Internal berry stock: `{id,x,y,active,pileId}`. Initial stock has a pile ID. Carried/delivered/spent stock stays inactive; it never regenerates. A dropped chip becomes loose with `pileId:null`. **Snapshots contain only loose berries**; initial stock is represented by pile counts.
 - Gator: `{x,y,riderId,progress}`, center coordinates, progress from −1 to 1.
 - Events: `{id,type,x,y,team,text,actor?,target?,amount?,score?,scoreTarget?,gateKind?,upgradeKind?}` for visual/audio cues. Actor/target are identity snapshots `{id,name,team,bot}` so a feed entry still identifies someone after they leave view or disconnect. KO events identify killer and victim; pickup/deposit identify the collector with `amount:1`, and deposits also include the new score and target. Short `text` remains compatible with world effects. The room retains at most 80 events; authoritative outcomes persist in state even if a congested client misses an event.
@@ -54,7 +62,7 @@ Team 0 is Roboflow purple (**Purple Pixels**); team 1 is coral (**Sunset Syndica
 
 - Economic: a Worker deposits one carried chip while grounded on the friendly hive platform, with their horizontal center inside its visible door. Flying through the building does not deposit. Deposits are permanent. Reaching the round’s locked proportional target (12 for 10 total players, 144 for 120) ends the round immediately.
 - Military: Queens and Warriors fight by directional close contact; height advantage decides opposing swords, equal-height swords clash, and Queens can dive. Each Queen loses one life per death. A team loses only after every assigned Queen has exhausted all three lives.
-- Gator: only Workers can mount with action near the crocodile. It moves toward the rider’s own goal at half-track-distance/70 world pixels per second, multiplied by 1.5 with a speed upgrade. An uninterrupted center-to-goal ride therefore takes 70 seconds normally or 46.67 seconds boosted; stolen rides retain their position. Jump dismounts. Reaching that goal ends the round.
+- Getaway (`gator`): only Workers can mount with action near the themed creature. It moves toward the rider’s own goal at half-track-distance/70 world pixels per second, multiplied by 1.5 with a speed upgrade. An uninterrupted center-to-goal ride therefore takes 70 seconds normally or 46.67 seconds boosted; stolen rides retain their position. Jump dismounts. Reaching that goal ends the round.
 - Machines: Queens claim stations by touching them. A Worker carrying one chip presses action inside a neutral/friendly station, then channels for 650 ms while stationary and vulnerable. Death or hostile capture cancels installation. Successful wing installation consumes the chip and grants Warrior flight; speed installation consumes it and grants faster movement/riding. Upgrades are lost on death.
 
 `winType` is `economic`, `military`, `gator`, or `null`. Frozen `victory` is `{type,team,actorName,durationMs,data:[n,n],scoreTarget,economyPlayerCount,queenLives:[n,n],queenQuota:[n,n],queensRemaining:[n,n],gatorProgress}`. A winning transition is atomic: subsequent simulation work cannot alter its outcome. There is no score-based timeout winner.
@@ -63,9 +71,9 @@ Bot jobs cycle through runner/fighter/gator/fighter on Normal and Hard, and runn
 
 ## Shared movement and renderer
 
-`/shared/world.js` exports `PLAYER_W`, `PLAYER_H`, `SPEED`, `GRAVITY`, `JUMP_SPEED`, `SCORE_TARGETS`, `BOT_DIFFICULTIES`, `economyForPlayers(total)`, `configureMapEconomy(map,total)`, `createMap(mode, totalPlayers?)` and `movePlayer(player,input,map,dt,now)`. It contains deterministic map configuration and movement/collision; match actions remain server-owned. Workers have one jump, military roles can flap while jump is held, Queen down/dash inputs dive in the air, and speed requires a gate upgrade. No browser globals.
+`/shared/world.js` exports `PLAYER_W`, `PLAYER_H`, `SPEED`, `GRAVITY`, `JUMP_SPEED`, `SCORE_TARGETS`, `BOT_DIFFICULTIES`, `economyForPlayers(total)`, `configureMapEconomy(map,total)`, `createMap(mode, totalPlayers?, mapId?)` and `movePlayer(player,input,map,dt,now)`. It contains deterministic map configuration and movement/collision; match actions remain server-owned. Workers have one jump, military roles can flap while jump is held, Queen down/dash inputs dive in the air, and speed requires a gate upgrade. No browser globals.
 
-`Renderer` exports `constructor(canvas)`, `setMap(map)`, `setState(state,localId)`, `render(dt,localPlayerOverride?)` and `destroy()`. Classic fits the full arena into a fixed camera with a compact HUD (128 CSS px reserved above, 44 below). XXL follows the local player with a limited viewport. It uses live gate/pile state, and renders pixel Miami scenery, raccoons, AI1 machines, gator, effects and readable objectives. The vault shows the exact score/target and chips remaining, grouping larger targets into at most 36 cells; a partial final group fills against its actual capacity. The client owns RAF, networking, input, HUD, audio and reconciliation.
+`Renderer` exports `constructor(canvas)`, `setMap(map)`, `setState(state,localId)`, `render(dt,localPlayerOverride?)` and `destroy()`. Classic fits the full arena on large displays and follows the player on small mobile viewports, with a compact HUD (128 CSS px reserved above, 44 below). XXL follows the local player with a limited viewport. It uses live gate/pile state, and renders destination-specific pixel scenery, themed Queens and getaway creatures, raccoons, AI1 machines, effects and readable objectives. The vault shows the exact score/target and chips remaining, grouping larger targets into at most 36 cells; a partial final group fills against its actual capacity. The client owns RAF, networking, input, HUD, audio and reconciliation.
 
 ## Touch input
 

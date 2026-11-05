@@ -1,4 +1,12 @@
-import { drawRaccoon, drawGator, drawData, TEAM } from './sprites.js';
+import { drawRaccoon, drawRide, drawData, TEAM } from './sprites.js';
+import { getMapDefinition } from '../shared/maps.js';
+import {
+  drawThemeBackground,
+  drawThemeScenery,
+  drawThemePlatform,
+  drawFinishLabels,
+  drawGlobalHero,
+} from './theme-art.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const mix = (a, b, t) => a + (b - a) * t;
@@ -55,6 +63,7 @@ export class Renderer {
     this.canvas.height = Math.round(r.height * dpr);
     const style = getComputedStyle(this.canvas.parentElement);
     const touch = this.canvas.parentElement.dataset.touch === 'true';
+    this.touchEnabled = touch;
     this.touchPortrait = touch && r.height >= r.width && r.width <= 1100;
     this.touchCompact = touch && (this.touchPortrait || r.height <= 600);
     this.safeTop = parseFloat(style.paddingTop) || 0;
@@ -222,8 +231,9 @@ export class Renderer {
     c.translate(Math.round(-this.camera.x + shake), Math.round(-this.camera.y));
     this.scenery(c);
     for (const p of map.platforms || []) if (this.visible(p.x, p.y, p.w, p.h)) this.platform(c, p);
+    drawFinishLabels(c, map, this.camera, this.w, this.cssScale);
     for (const b of map.bases || [])
-      if (this.visible(b.x - 40, b.y - 80, b.w + 80, b.h + 80)) this.base(c, b);
+      if (this.visible(b.x - 40, b.y - 80, b.w + 80, b.h + 80)) this.base(c, b, local);
     for (const g of this.state?.gates || map.gates || [])
       if (this.visible(g.x, g.y - 50, g.w, g.h + 60)) this.gate(c, g, local);
     for (const b of this.state?.berries || [])
@@ -241,19 +251,19 @@ export class Renderer {
       c.globalAlpha = 0.16;
       box(c, '#183c4c', gator.x - 66, gator.y + 18, 130, 7);
       c.globalAlpha = 1;
-      drawGator(c, gator, this.elapsed, rider?.team);
-      if (!gator.riderId) {
-        text(c, 'FLORIDA MAN’S UBER', gator.x, gator.y - 57, 10, '#417763');
-        if (local && Math.abs(local.x - gator.x) < 130)
-          this.tag(
-            c,
-            local.role === 'worker' ? 'E  HOP ON' : 'WORKERS RIDE · YOU PROTECT',
-            gator.x,
-            gator.y - 40,
-            '#effec6',
-            '#244f50',
-          );
-      }
+      drawRide(c, gator, this.elapsed, rider?.team, map.mapId);
+      if (!gator.riderId && local && Math.hypot(local.x - gator.x, local.y - gator.y) < 150)
+        this.tag(
+          c,
+          local.role === 'worker'
+            ? `${this.touchEnabled ? 'ACTION' : 'E'} · RIDE ${getMapDefinition(map.mapId).ride.name.toUpperCase()}`
+            : 'WORKERS RIDE',
+          gator.x,
+          gator.y - 76,
+          '#effec6',
+          '#244f50',
+          12,
+        );
     }
     const now = (this.state?.time || Date.now()) + Math.min(120, performance.now() - this.received);
     this.nameplateSlots = [];
@@ -290,7 +300,7 @@ export class Renderer {
     }
     if (rawLocal && !rawLocal.alive) {
       c.globalAlpha = 0.3;
-      drawRaccoon(c, { ...rawLocal, grounded: false }, this.elapsed);
+      drawRaccoon(c, { ...rawLocal, grounded: false }, this.elapsed, { mapId: map.mapId });
       c.globalAlpha = 1;
       this.tag(
         c,
@@ -330,161 +340,21 @@ export class Renderer {
     c.strokeRect(1, 1, this.w - 2, this.h - 2);
   }
   background(c) {
-    const grad = c.createLinearGradient(0, 0, 0, this.h);
-    grad.addColorStop(0, '#f6b6aa');
-    grad.addColorStop(0.55, '#ffe1ae');
-    grad.addColorStop(1, '#fceac1');
-    c.fillStyle = grad;
-    c.fillRect(0, 0, this.w, this.h);
-    const sunX = this.w * 0.73 - this.camera.x * 0.018,
-      sunY = this.h * 0.24 - this.camera.y * 0.025;
-    c.fillStyle = '#fff2b6';
-    c.beginPath();
-    c.arc(sunX, sunY, 75, 0, Math.PI * 2);
-    c.fill();
-    for (let i = 0; i < 4; i++) box(c, '#f8c3a7', sunX - 80, sunY + 20 + i * 13, 160, 3 + i);
-    for (let i = -1; i < 7; i++) {
-      const x = i * 260 - ((this.camera.x * 0.06) % 260),
-        y = 70 + random(i + 4) * this.h * 0.3;
-      box(c, '#ffe7c4', x, y, 90, 8);
-      box(c, '#ffe7c4', x + 17, y - 8, 50, 12);
-      box(c, '#ffe7c4', x - 15, y + 8, 130, 4);
-    }
-    const horizon = this.h * 0.73 + (this.map.height - this.camera.y - this.h) * 0.1;
-    box(c, '#95d4cc', 0, horizon, this.w, this.h - horizon);
-    box(c, '#b5e5d3', 0, horizon + 7, this.w, 5);
-    for (let i = 0; i < 7; i++)
-      box(
-        c,
-        i % 2 ? '#b4e6d6' : '#78c8c3',
-        ((i * 211 - this.camera.x * 0.12) % (this.w + 300)) - 100,
-        horizon + 20 + i * 21,
-        90 + i * 11,
-        3,
-      );
-    // Three skyline depths; deterministic towers scroll in parallax.
-    this.skyline(c, horizon, '#c8b4ba', 0.12, 110, 1);
-    this.skyline(c, horizon + 12, '#a7bbc0', 0.2, 75, 2);
-  }
-  skyline(c, bottom, color, parallax, maxHeight, seed) {
-    const space = 150;
-    const offset = this.camera.x * parallax;
-    const start = Math.floor(offset / space) - 1;
-    for (let i = start; i < start + Math.ceil(this.w / space) + 3; i++) {
-      const r = random(i + seed * 90),
-        x = i * space - offset,
-        w = 60 + r * 70,
-        h = 30 + random(i + 88) * maxHeight;
-      box(c, color, x, bottom - h, w, h);
-      box(c, color, x + 8, bottom - h - 8, w - 16, 9);
-      if (r > 0.5) box(c, color, x + w * 0.5, bottom - h - 25, 3, 20);
-      c.globalAlpha = 0.3;
-      for (let yy = bottom - h + 14; yy < bottom - 8; yy += 18)
-        box(c, '#fff0d5', x + 10, yy, w - 20, 3);
-      c.globalAlpha = 1;
-    }
+    drawThemeBackground(c, {
+      mapId: this.map.mapId,
+      width: this.w,
+      height: this.h,
+      camera: this.camera,
+      mapHeight: this.map.height,
+    });
   }
   scenery(c) {
-    const floor = this.map.height - 80;
-    const first = Math.floor((this.camera.x - 200) / 450);
-    for (let i = first; i < first + Math.ceil(this.w / 450) + 2; i++) {
-      const x = i * 450 + 100;
-      if (x < 0 || x > this.map.width) continue;
-      this.palm(c, x, floor, 1 + (i % 3) * 0.16);
-      if (i % 2 === 0) this.beachUmbrella(c, x + 135, floor);
-    }
-    const start = Math.floor(this.camera.x / 1500) - 1;
-    for (let i = start; i < start + 3; i++) {
-      const x = i * 1500 + 750;
-      if (x < 300 || x > this.map.width - 300) continue;
-      // A roadside motel becomes a love letter to computer vision.
-      box(c, '#cc8f9c', x, floor - 200, 176, 200);
-      box(c, '#f4c4b7', x + 8, floor - 196, 160, 192);
-      box(c, '#fff0cc', x - 5, floor - 205, 186, 8);
-      box(c, '#c7899b', x + 14, floor - 164, 148, 5);
-      for (let k = 0; k < 3; k++) {
-        box(c, '#71aaa9', x + 18 + k * 50, floor - 141, 32, 42);
-        box(c, '#d6e4c2', x + 20 + k * 50, floor - 139, 28, 3);
-      }
-      box(c, '#d291a3', x + 14, floor - 88, 148, 5);
-      box(c, '#6ca5a3', x + 67, floor - 62, 42, 62);
-      box(c, '#263d52', x + 13, floor - 190, 150, 22);
-      text(c, 'ROBOFLOW', x + 88, floor - 178, 16, '#d6ffe5');
-      text(c, 'VISION  MOTEL', x + 88, floor - 70, 10, '#895f76');
-    }
-    const track = this.map.gatorTrack;
-    if (track) {
-      const y = track.y + 27;
-      box(c, '#e5b786', track.x1, y, track.x2 - track.x1, 9);
-      const lo = Math.max(track.x1, Math.floor(this.camera.x / 65) * 65);
-      for (let x = lo; x < Math.min(track.x2, this.camera.x + this.w + 65); x += 65)
-        box(c, '#fff0c8', x, y + 2, 30, 3);
-    }
+    drawThemeScenery(c, this.map, this.camera, this.w);
   }
-  palm(c, x, y, s = 1) {
-    c.save();
-    c.translate(Math.round(x), Math.round(y));
-    c.scale(s, s);
-    box(c, '#a57777', -6, -125, 11, 125);
-    box(c, '#c3977c', -1, -118, 5, 118);
-    for (let i = 0; i < 7; i++) box(c, '#926d70', -6, -110 + i * 16, 11, 4);
-    const dark = '#3e8c7b',
-      light = '#69b68c';
-    for (const side of [-1, 1]) {
-      box(c, dark, side === 1 ? 0 : -55, -137, 55, 12);
-      box(c, light, side === 1 ? 0 : -46, -143, 46, 8);
-      box(c, dark, side === 1 ? 43 : -68, -127, 25, 11);
-      box(c, dark, side === 1 ? 61 : -74, -118, 13, 15);
-      box(c, light, side === 1 ? 3 : -32, -156, 29, 12);
-      box(c, dark, side === 1 ? 23 : -46, -167, 23, 11);
-      box(c, dark, side === 1 ? 9 : -24, -119, 15, 32);
-      box(c, light, side === 1 ? 9 : -17, -124, 8, 28);
-    }
-    box(c, '#8c676a', -10, -128, 20, 12);
-    box(c, '#c3a07b', -7, -127, 7, 6);
-    c.restore();
+  platform(c, platform) {
+    drawThemePlatform(c, platform, this.map, this.camera, this.w);
   }
-  beachUmbrella(c, x, y) {
-    box(c, '#d1a181', x, y - 68, 4, 68);
-    box(c, '#da8c94', x - 35, y - 70, 74, 7);
-    box(c, '#f3acaa', x - 28, y - 79, 60, 10);
-    box(c, '#ffe3bf', x - 17, y - 85, 38, 9);
-    box(c, '#f3acaa', x - 6, y - 91, 17, 9);
-    box(c, '#fff1d1', x - 8, y - 80, 20, 15);
-    box(c, '#ac8b84', x - 30, y - 11, 25, 6);
-    box(c, '#ac8b84', x - 27, y - 28, 4, 22);
-  }
-  platform(c, p) {
-    const floor = p.y >= this.map.height - 90;
-    if (floor) {
-      box(c, '#a4c8aa', p.x, p.y, p.w, p.h);
-      box(c, '#e6e3bd', p.x, p.y, p.w, 10);
-      box(c, '#f9efce', p.x, p.y, p.w, 4);
-      box(c, '#78aa97', p.x, p.y + 22, p.w, 4);
-      for (
-        let x = Math.max(p.x, Math.floor(this.camera.x / 70) * 70);
-        x < Math.min(p.x + p.w, this.camera.x + this.w + 80);
-        x += 70
-      ) {
-        box(c, '#8db69d', x, p.y + 40, 28, 4);
-        box(c, '#bdd4af', x + 30, p.y + 58, 15, 4);
-      }
-      return;
-    }
-    const tone = p.kind === 'center' ? '#e79999' : '#78b8b6';
-    box(c, '#466e80', p.x + 3, p.y + 6, p.w, Math.max(p.h, 19));
-    box(c, tone, p.x, p.y, p.w, p.h);
-    box(c, '#fff0ca', p.x, p.y, p.w, 6);
-    box(c, '#afdad0', p.x, p.y + 6, p.w, 3);
-    for (let x = p.x + 12; x < p.x + p.w - 10; x += 32)
-      box(c, 'rgba(28,76,85,.15)', x, p.y + 13, 16, 4);
-    box(c, '#436e7b', p.x + 8, p.y + p.h, 10, 8);
-    box(c, '#436e7b', p.x + p.w - 18, p.y + p.h, 10, 8);
-    // Small neon landing lights make platform boundaries obvious at speed.
-    box(c, '#f6ffcc', p.x + 2, p.y - 3, 5, 3);
-    box(c, '#f6ffcc', p.x + p.w - 7, p.y - 3, 5, 3);
-  }
-  base(c, b) {
+  base(c, b, local) {
     const t = TEAM[b.team || 0];
     const score = this.state?.scores?.[b.team] || 0;
     box(c, t.dark, b.x - 5, b.y + 10, b.w + 10, b.h - 10);
@@ -540,17 +410,21 @@ export class Renderer {
         7,
         '#e4d7ff',
       );
-    text(c, `${Math.max(0, slots - score)} TO GO`, b.x + b.w / 2, b.y + b.h - 14, 10, '#fff3ce');
     const door = b.door || { x: b.x + b.w / 2 - 28, w: 56 };
     box(c, '#182d3f', door.x - 4, b.y + b.h - 5, door.w + 8, 8);
     box(c, '#edffb7', door.x, b.y + b.h - 5, door.w, 3);
-    text(c, '↓ DELIVER HERE ↓', b.x + b.w / 2, b.y + b.h + 35, 10, t.dark);
+    if (
+      local?.team === b.team &&
+      local.carrying &&
+      Math.hypot(local.x + 14 - b.x - b.w / 2, local.y + 36 - b.y - b.h) < 210
+    )
+      this.tag(c, '↓ DELIVER HERE', b.x + b.w / 2, b.y + b.h + 35, '#fff4ce', t.ink, 12);
     const flagX = b.team === 0 ? b.x - 25 : b.x + b.w + 24;
     box(c, '#335a67', flagX, b.y - 75, 4, b.h + 75);
     box(c, t.main, flagX + 4, b.y - 75, 53, 29);
     box(c, t.light, flagX + 8, b.y - 71, 45, 4);
     text(c, b.team === 0 ? '01' : '02', flagX + 30, b.y - 57, 14, t.ink);
-    this.tag(c, `${score} / ${slots} · DATA VAULT`, b.x + b.w / 2, b.y - 28, '#fff4ce', t.ink);
+    this.tag(c, `DATA ${score} / ${slots}`, b.x + b.w / 2, b.y - 32, '#fff4ce', t.ink, 12);
   }
   dataPile(c, pile, local) {
     const { x, y } = pile,
@@ -569,14 +443,7 @@ export class Renderer {
       for (let col = 0; col < inRow; col++, shown++)
         drawData(c, x + (col - (inRow - 1) / 2) * 15, y - row * 13, 0, 0.8, { bob: false });
     }
-    this.tag(
-      c,
-      count ? `${count} CHIPS` : 'EMPTY',
-      x,
-      y - 77,
-      '#302445',
-      count ? '#e0c4ff' : '#9e95a8',
-    );
+    this.tag(c, String(count), x, y - 85, '#302445', count ? '#e0c4ff' : '#9e95a8', 12);
     if (
       local?.role === 'worker' &&
       !local.carrying &&
@@ -591,7 +458,8 @@ export class Renderer {
             Math.hypot(local.x + 14 - a.x, local.y + 20 - a.y) -
             Math.hypot(local.x + 14 - b.x, local.y + 20 - b.y),
         );
-      if (nearby[0]?.id === pile.id) text(c, 'WALK IN · TAKE ONE', x, y + 34, 8, '#413754');
+      if (nearby[0]?.id === pile.id)
+        this.tag(c, 'TAKE A CHIP', x, y + 39, '#fff4ce', '#413754', 12);
     }
   }
   gate(c, g, local) {
@@ -630,15 +498,6 @@ export class Renderer {
     c.globalAlpha = 0.17 + Math.sin(this.elapsed * 3) * 0.04;
     box(c, t.light, g.x + 15, g.y + 28, g.w - 30, g.h - 40);
     c.globalAlpha = 1;
-    text(c, speed ? 'ROBOFLOW · TURBO' : 'AI1 · FLIGHT LAB', cx, g.y - 38, 9, '#36344e');
-    text(
-      c,
-      neutral ? 'NEUTRAL' : g.team === 0 ? 'PURPLE CONTROL' : 'SUNSET CONTROL',
-      cx,
-      g.y - 25,
-      8,
-      t.ink,
-    );
     const yy = g.y + 39 + Math.sin(this.elapsed * 2) * 3;
     if (speed) {
       box(c, '#fff2aa', cx - 2, yy, 8, 9);
@@ -657,7 +516,6 @@ export class Renderer {
           );
       box(c, '#fff2aa', cx - 2, yy + 4, 4, 14);
     }
-    text(c, installing ? 'INSTALLING…' : '1 DATA', cx, g.y + g.h - 12, 7, '#fff1c3');
     if (installing) {
       const progress = clamp(1 - (installing.upgradeUntil - now) / 650, 0, 1);
       box(c, '#162333', g.x + 14, g.y + g.h + 10, g.w - 28, 5);
@@ -672,22 +530,29 @@ export class Renderer {
       );
     }
     if (local && Math.abs(local.x + 14 - cx) < 100 && Math.abs(local.y - g.y) < 100) {
+      const nearest = [...(this.state?.gates || this.map.gates || [])].sort(
+        (a, b) =>
+          Math.hypot(local.x + 14 - a.x - a.w / 2, local.y - a.y) -
+          Math.hypot(local.x + 14 - b.x - b.w / 2, local.y - b.y),
+      )[0];
+      if (nearest?.id !== g.id) return;
       const available = neutral || g.team === local.team;
+      const station = speed ? 'SPEED' : 'FLIGHT';
       const hint =
         local.role === 'queen'
-          ? 'TOUCH TO CLAIM'
+          ? `CLAIM ${station}`
           : local.role === 'warrior'
             ? 'PROTECT YOUR WORKERS'
             : !available
-              ? 'YOUR QUEEN MUST CLAIM IT'
+              ? 'QUEEN MUST CLAIM'
               : !local.carrying
-                ? 'BRING 1 DATA CHIP'
+                ? `${station} · BRING 1 CHIP`
                 : speed && local.speedBoost
-                  ? 'SPEED ALREADY EQUIPPED'
+                  ? 'SPEED EQUIPPED'
                   : installing
-                    ? 'INSTALLING UPGRADE…'
-                    : 'E  ENTER THE MACHINE';
-      this.tag(c, hint, cx, g.y - 60, '#243c4b', available ? '#f8edc4' : '#ffb2a2');
+                    ? 'INSTALLING…'
+                    : `${this.touchEnabled ? 'ACTION' : 'E'} · GET ${station}`;
+      this.tag(c, hint, cx, g.y - 42, '#243c4b', available ? '#f8edc4' : '#ffb2a2', 12);
     }
   }
   player(c, p, now, isLocal) {
@@ -719,7 +584,7 @@ export class Renderer {
     c.globalAlpha = 1;
     const invulnerable = (p.invulnerableUntil || 0) > now;
     if (invulnerable) c.globalAlpha = 0.55 + Math.sin(this.elapsed * 22) * 0.2;
-    drawRaccoon(c, p, this.elapsed, { now });
+    drawRaccoon(c, p, this.elapsed, { now, mapId: this.map.mapId });
     c.globalAlpha = 1;
     if ((p.attackUntil || 0) > now) {
       c.save();
@@ -751,7 +616,7 @@ export class Renderer {
         c,
         `${p.role === 'queen' ? '♛ ' : ''}${name}${isLocal ? ' · YOU' : ''}`,
         p.x + 14,
-        p.y - (p.role === 'queen' ? 48 : 39),
+        p.y - (p.role === 'queen' ? 60 : 43),
         team.main,
         isLocal,
         p.role === 'queen' ? (p.queenLives ?? 3) : null,
@@ -768,7 +633,7 @@ export class Renderer {
   }
   nameplate(c, s, x, y, color, isLocal, queenLives = null) {
     // Keep names readable when the Classic arena is fitted to a laptop screen.
-    const labelScale = this.map?.mode === 'normal' ? Math.max(1, 0.9 / this.cssScale) : 1;
+    const labelScale = this.map?.mode === 'normal' ? Math.max(1, 1.2 / this.cssScale) : 1;
     const hasLives = Number.isFinite(queenLives),
       lifeWidth = hasLives ? 32 : 0;
     c.font = 'bold 10px "Courier New", monospace';
@@ -815,9 +680,11 @@ export class Renderer {
     }
     if (labelScale !== 1) c.restore();
   }
-  tag(c, s, x, y, bg, fg) {
+  tag(c, s, x, y, bg, fg, minCss = 8.5) {
     const labelScale =
-      this.map?.mode === 'normal' && !this.followCamera ? Math.max(1, 0.85 / this.cssScale) : 1;
+      this.map?.mode === 'normal' && !this.followCamera
+        ? Math.max(1, minCss / (10 * this.cssScale))
+        : 1;
     if (labelScale !== 1) {
       c.save();
       c.translate(x, y);
@@ -842,7 +709,14 @@ export class Renderer {
         label: p.carrying ? 'DELIVER DATA' : 'YOUR HQ',
         color: TEAM[p.team].main,
       });
-    if (g) indicators.push({ x: g.x, y: g.y, label: 'GATOR', color: '#d5edaa' });
+    if (g)
+      indicators.push({
+        x: g.x,
+        y: g.y,
+        label: getMapDefinition(this.map.mapId).ride.name.toUpperCase(),
+        ride: true,
+        color: '#e6ebbd',
+      });
     for (const q of indicators) {
       const x = q.x - this.camera.x;
       if (x > 60 && x < this.w - 60) continue;
@@ -853,7 +727,7 @@ export class Renderer {
         this.tag(
           c,
           `${right ? '' : '‹ '}${q.label}${right ? ' ›' : ''}`,
-          (this.w * this.cssScale) / 2 + (q.label === 'GATOR' ? 82 : -82),
+          (this.w * this.cssScale) / 2 + (q.ride ? 82 : -82),
           this.h * this.cssScale -
             (this.touchPortrait ? this.arenaBottom + 15 : 49 + this.safeBottom),
           '#294c57',
@@ -864,7 +738,7 @@ export class Renderer {
       }
       const right = x > this.w;
       const xx = right ? this.w - 55 : 55;
-      const yy = this.h - 90 + (q.label === 'GATOR' ? 27 : 0);
+      const yy = this.h - 90 + (q.ride ? 27 : 0);
       this.tag(c, `${right ? '' : '‹ '}${q.label}${right ? ' ›' : ''}`, xx, yy, '#294c57', q.color);
     }
   }
@@ -899,39 +773,7 @@ export class Renderer {
   }
   attract(c) {
     c.setTransform(this.scale, 0, 0, this.scale, 0, 0);
-    const prev = this.map;
-    this.map = { width: 3200, height: 1320 };
-    this.camera = { x: this.elapsed * 7, y: 600 };
-    this.background(c);
-    const y = this.h - 65;
-    this.palm(c, this.w * 0.13, y, 1.4);
-    this.palm(c, this.w * 0.87, y, 1.65);
-    this.beachUmbrella(c, this.w * 0.67, y);
-    box(c, '#e5deaf', 0, y, this.w, 65);
-    box(c, '#f7edc8', 0, y, this.w, 8);
-    drawGator(c, { x: this.w * 0.55, y: y - 18, riderId: 1 }, this.elapsed, 1);
-    drawRaccoon(
-      c,
-      {
-        x: this.w * 0.55 - 12,
-        y: y - 74,
-        team: 1,
-        role: 'worker',
-        grounded: true,
-        facing: -1,
-        vx: 60,
-        carrying: true,
-      },
-      this.elapsed,
-    );
-    drawRaccoon(
-      c,
-      { x: this.w * 0.34, y: y - 40, team: 0, role: 'queen', grounded: true, facing: 1, vx: 70 },
-      this.elapsed,
-      { scale: 2.2 },
-    );
-    for (let i = 0; i < 3; i++) drawData(c, this.w * 0.4 + i * 30, y - 20 - i * 15, this.elapsed);
-    this.map = prev;
+    drawGlobalHero(c, this.w, this.h);
   }
 }
 

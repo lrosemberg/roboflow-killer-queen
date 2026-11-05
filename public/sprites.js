@@ -1,5 +1,6 @@
 // Small, deterministic pixel sprites. Kept as source so their silhouettes stay
 // crisp at every camera scale and animation never requires a texture upload.
+import { drawQueenAccessory, drawThemedRide } from './theme-sprites.js';
 export const TEAM = [
   { main: '#a78bfa', light: '#ede3ff', dark: '#6540b2', ink: '#322552', name: 'PURPLE PIXELS' },
   { main: '#ff7d91', light: '#ffd6c9', dark: '#ad375f', ink: '#532d50', name: 'SUNSET SYNDICATE' },
@@ -200,9 +201,8 @@ function articulatedRaccoon(ctx, p, t, options, team) {
   ctx.translate(0, bob);
   shirt(ctx, team);
   if (atlas.complete && atlas.naturalWidth) {
-    const f = heads[p.role] || heads.worker;
-    const h = p.role === 'queen' ? 31 : 27;
-    atlasFrame(ctx, f, 3, -22, h);
+    const f = p.role === 'queen' ? heads.worker : heads[p.role] || heads.worker;
+    atlasFrame(ctx, f, 3, -22, 27);
     // Purple/coral neckline covers the original source shirt, which never
     // needs to be recolored or modified on disk.
     rect(ctx, team.main, -5, -24, 13, 3);
@@ -216,14 +216,9 @@ function articulatedRaccoon(ctx, p, t, options, team) {
     rect(ctx, '#262c45', 7, -30, 4, 3);
     rect(ctx, '#262c45', -12, -49, 7, 8);
     rect(ctx, '#262c45', 8, -49, 7, 8);
-    if (p.role === 'queen') {
-      rect(ctx, '#ffd46b', -9, -52, 23, 5);
-      rect(ctx, '#ffd46b', -9, -57, 4, 7);
-      rect(ctx, '#ffd46b', 1, -58, 4, 8);
-      rect(ctx, '#ffd46b', 10, -57, 4, 7);
-    }
     if (p.role === 'warrior') rect(ctx, '#182138', -11, -39, 28, 6);
   }
+  if (p.role === 'queen') drawQueenAccessory(ctx, options.mapId || 'miami', t);
   ctx.restore();
   limb(ctx, 4, -10 + bob, fx2, fy2, true);
   const swing = attack ? 11 : airborne ? 7 : moving ? Math.round(Math.sin(wave) * 7) : 1;
@@ -247,6 +242,14 @@ function articulatedRaccoon(ctx, p, t, options, team) {
 
 export function drawRaccoon(ctx, p, t, options = {}) {
   articulatedRaccoon(ctx, p, t, options, TEAM[p.team || 0]);
+}
+
+export function drawRide(ctx, ride, t, team = null, mapId = 'miami') {
+  if (mapId === 'miami' || !['san-francisco', 'new-york', 'brazil', 'singapore'].includes(mapId)) {
+    drawGator(ctx, ride, t, team);
+  } else {
+    drawThemedRide(ctx, ride, t, team, mapId);
+  }
 }
 
 export function drawGator(ctx, gator, t, team = null) {

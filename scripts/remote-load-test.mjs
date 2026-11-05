@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import WebSocket from 'ws';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { decodeSnapshot } from '../shared/protocol.js';
 import { NetworkInput } from '../public/network-input.js';
 
@@ -34,6 +35,11 @@ assert.ok(
 );
 const peers = [];
 const latencies = [];
+const inputAckLatencies = [],
+  stateAgeDrift = [],
+  timedLatency = [];
+const eventLoop = monitorEventLoopDelay({ resolution: 10 });
+eventLoop.enable();
 const snapshotGaps = [];
 const visiblePlayers = [];
 const serverTimingSamples = [];
@@ -106,15 +112,23 @@ async function connect(index, expectedRejection = false) {
     maxMovement: 0,
     skippedInputs: 0,
     inputMessages: 0,
+    sentKinds: {},
+    inputTimes: new Map(),
+    measuredAck: 0,
+    oldestInputMs: 0,
+    maxPendingInputs: 0,
     eventAck: 0,
     eventEpoch: null,
     deliveredEvents: 0,
     replayedEvents: 0,
+    measuredEvents: 0,
+    measuredReplayedEvents: 0,
   };
   peers.push(peer);
   peer.send = (message) => {
     if (ws.readyState !== WebSocket.OPEN) return false;
     ws.send(JSON.stringify(message));
+    peer.sentKinds[message.type] = (peer.sentKinds[message.type] || 0) + 1;
     return true;
   };
   peer.input = new NetworkInput({
@@ -132,6 +146,12 @@ async function connect(index, expectedRejection = false) {
       if (sent) {
         peer.seq++;
         peer.inputMessages++;
+        if (measuring) {
+          peer.inputTimes.set(peer.seq, performance.now());
+          peer.maxPendingInputs = Math.max(peer.maxPendingInputs, peer.inputTimes.size);
+          if (peer.inputTimes.size > 1024)
+            peer.inputTimes.delete(peer.inputTimes.keys().next().value);
+        }
       }
       return sent;
     },
@@ -159,8 +179,11 @@ async function connect(index, expectedRejection = false) {
       peer.eventAck = Math.max(peer.eventAck, (message.eventFloor || 1) - 1);
       const priorAck = peer.eventAck;
       for (const event of message.events || []) {
-        if (event.id <= peer.eventAck) peer.replayedEvents++;
-        else {
+        if (event.id <= peer.eventAck) {
+          peer.replayedEvents++;
+          if (measuring) peer.measuredReplayedEvents++;
+        } else {
+          if (measuring) peer.measuredEvents++;
           peer.eventAck = event.id;
           peer.deliveredEvents++;
         }
@@ -173,6 +196,20 @@ async function connect(index, expectedRejection = false) {
       const receivedAt = performance.now();
       if (peer.lastStateAt) snapshotGaps.push(receivedAt - peer.lastStateAt);
       peer.lastStateAt = receivedAt;
+      peer.ageAnchor ||= { receivedAt, serverAt: message.time };
+      stateAgeDrift.push(
+        receivedAt - peer.ageAnchor.receivedAt - (message.time - peer.ageAnchor.serverAt),
+      );
+      if (message.ack > peer.measuredAck) {
+        const sentAt = peer.inputTimes.get(message.ack);
+        if (sentAt !== undefined) inputAckLatencies.push(receivedAt - sentAt);
+        for (const key of peer.inputTimes.keys())
+          if (key <= message.ack) peer.inputTimes.delete(key);
+        peer.measuredAck = message.ack;
+      }
+      const oldest = peer.inputTimes.values().next().value;
+      if (oldest !== undefined)
+        peer.oldestInputMs = Math.max(peer.oldestInputMs, receivedAt - oldest);
       visiblePlayers.push(message.players.length);
       peer.states++;
       peer.maxAck = Math.max(peer.maxAck, message.ack || 0);
@@ -182,8 +219,11 @@ async function connect(index, expectedRejection = false) {
       if (message.playerCount !== players || message.botCount !== 0 || message.status !== 'playing')
         fail(peer, 'test match lost players, gained bots, or stopped');
     }
-    if (message.type === 'pong' && measuring && Number.isFinite(message.time))
-      latencies.push(performance.now() - message.time);
+    if (message.type === 'pong' && measuring && Number.isFinite(message.time)) {
+      const ms = performance.now() - message.time;
+      latencies.push(ms);
+      timedLatency.push({ at: new Date().toISOString(), peer: peer.index, ms: +ms.toFixed(2) });
+    }
     for (const pending of [...peer.pending]) {
       if (pending.type === message.type && pending.predicate(message)) {
         peer.pending = peer.pending.filter((item) => item !== pending);
@@ -338,7 +378,9 @@ try {
     ),
     extensions: [...new Set(participants.map((peer) => peer.ws.extensions))],
   };
+  result.healthAtMeasurementStart = await json('/api/health');
   stage = 'measuring-match';
+  eventLoop.reset();
   measuring = true;
   measuredStart = performance.now();
   healthTimer = setInterval(async () => {
@@ -413,6 +455,21 @@ try {
   };
   result.measurement = {
     players: participants.length,
+    inputAckMs: distribution(inputAckLatencies),
+    relativeSnapshotAgeDriftMs: distribution(stateAgeDrift),
+    snapshotAgeNote:
+      'Receive-time delta minus server-time delta relative to each client first measured snapshot. Measures additional lag drift, not absolute one-way latency or clock offset.',
+    maximumPendingInputs: Math.max(...participants.map((p) => p.maxPendingInputs)),
+    oldestUnacknowledgedInputMs: +Math.max(...participants.map((p) => p.oldestInputMs)).toFixed(2),
+    sentMessages: participants.reduce((all, p) => {
+      for (const [kind, count] of Object.entries(p.sentKinds)) all[kind] = (all[kind] || 0) + count;
+      return all;
+    }, {}),
+    generatorEventLoopMs: {
+      p95: +(eventLoop.percentile(95) / 1e6).toFixed(2),
+      p99: +(eventLoop.percentile(99) / 1e6).toFixed(2),
+      max: +(eventLoop.max / 1e6).toFixed(2),
+    },
     durationSeconds: +seconds.toFixed(3),
     snapshots: participants.reduce((sum, peer) => sum + peer.states, 0),
     meanSnapshotsPerPlayerPerSecond: +(
@@ -435,6 +492,13 @@ try {
       players /
       seconds
     ).toFixed(2),
+    eventCountersScope:
+      'deliveredEvents and deduplicatedReplayEvents include join/lobby setup; measurement-only counts are separate.',
+    measuredEvents: participants.reduce((sum, peer) => sum + peer.measuredEvents, 0),
+    measuredDeduplicatedReplays: participants.reduce(
+      (sum, peer) => sum + peer.measuredReplayedEvents,
+      0,
+    ),
     deliveredEvents: participants.reduce((sum, peer) => sum + peer.deliveredEvents, 0),
     deduplicatedReplayEvents: participants.reduce((sum, peer) => sum + peer.replayedEvents, 0),
     decodedMegabytes: +(decodedBytes / 1024 / 1024).toFixed(2),
@@ -450,6 +514,16 @@ try {
       max: latencies.length ? +latencies.at(-1).toFixed(2) : null,
     },
   };
+  result.quality = {
+    withinLatencyBudget:
+      inputAckLatencies.length > 0 &&
+      result.measurement.inputAckMs.p95 <= 200 &&
+      result.measurement.snapshotGapMs.p95 <= 150 &&
+      result.measurement.applicationPingMs.p95 <= 200,
+    budget:
+      'p95 input acknowledgement and application RTT <=200ms; p95 snapshot gap <=150ms. Functional success below is separate from this measured latency budget.',
+  };
+  result.timedApplicationPing = timedLatency;
   assert.ok(!deadlineExceeded, 'Overall test deadline exceeded');
   assert.ok(
     participants.every((peer) => !peer.failure),
@@ -535,6 +609,7 @@ try {
 } finally {
   cleanup = true;
   measuring = false;
+  eventLoop.disable();
   clearTimeout(deadline);
   clearInterval(inputTimer);
   clearInterval(healthTimer);

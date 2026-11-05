@@ -96,7 +96,7 @@ The server runs the authoritative simulation at 60 Hz and sends live snapshots a
 
 An unexpected disconnection reserves your seat for **15 seconds**. Reconnecting in the same tab restores the same player, team, role and current match state. Your character stops taking input but remains in the match and can still be defeated; the match does not pause. Leaving explicitly releases the seat immediately. A server restart ends in-memory rooms and recovery sessions.
 
-Slow connections skip outdated visual snapshots in favor of the newest state. Recent activity events have bounded replay and duplicate suppression. Critical map/control congestion triggers a fresh connection with a full room/map sync. Input queues are bounded so seconds-old movement is not replayed after congestion. These safeguards improve recovery; they cannot remove internet latency or guarantee uninterrupted play on a failing network. See the [measured 120-client tests](docs/PERFORMANCE.md).
+Slow connections skip outdated visual snapshots in favor of the newest state. Recent activity events are sent once per connection, with bounded replay after recovery and duplicate suppression. Critical map/control congestion triggers a fresh connection with a full room/map sync. Input queues are bounded so seconds-old movement is not replayed after congestion. A two-second input acknowledgement guard also recovers a connection that keeps delivering old state. These safeguards improve recovery; they cannot remove internet latency or guarantee uninterrupted play on a failing network. See the [measured 120-client tests](docs/PERFORMANCE.md).
 
 ## Host online
 

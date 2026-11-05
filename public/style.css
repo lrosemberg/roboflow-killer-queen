@@ -6032,3 +6032,372 @@ body[data-touch='true'] textarea {
 #waiting-banner #lobby-role-worker em {
   font: 14px/1.4 var(--body);
 }
+
+/* Score and getaway meters share a flow layout, so they cannot overlap. */
+#game {
+  --hud-bar-height: 54px;
+  --hud-gap: 8px;
+  --arena-top: 144;
+}
+#game .objective-hud {
+  position: absolute;
+  top: calc(var(--hud-bar-height) + var(--hud-gap) + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 20px);
+  z-index: 2;
+  pointer-events: none;
+}
+#game[data-mode] .objective-hud .score-hud,
+#game[data-mode] .objective-hud .gator-hud {
+  position: static;
+  transform: none;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  max-width: 100%;
+}
+#game[data-mode] .objective-hud .gator-hud {
+  width: max-content;
+}
+#game[data-mode] .game-feed {
+  top: 150px;
+}
+#game .player-card {
+  flex: 1 1 0;
+  min-width: 0;
+}
+#game .player-card > div {
+  flex: 1 1 0;
+  min-width: 0;
+}
+#game[data-mode] .role-swap {
+  width: auto;
+  max-width: none;
+  margin-left: 4px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+#game .controls-hint {
+  flex: 0 1 auto;
+}
+#game .team-score.mint {
+  color: #f1e6ff;
+  border-color: #8b4ef3;
+  background: #2b1749ee;
+}
+#game .team-score.coral {
+  color: #fff0c2;
+  border-color: #ff8b45;
+  background: #51231fee;
+}
+@media (max-width: 760px) {
+  #game {
+    --hud-bar-height: 45px;
+  }
+}
+@media (orientation: landscape) and (max-height: 600px),
+  (orientation: portrait) and (max-width: 1100px) {
+  #game[data-touch='true'] {
+    --hud-bar-height: 34px;
+    --hud-gap: 4px;
+  }
+  #game[data-touch='true'] .objective-hud {
+    gap: 3px;
+  }
+  #game[data-touch='true'][data-mode] .objective-hud .team-score {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+@media (orientation: portrait) and (max-width: 1100px) {
+  #game[data-touch='true'] {
+    --hud-bar-height: 44px;
+  }
+}
+
+/* The first briefing keeps entry actions visible; extra controls are optional. */
+#briefing-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow: hidden;
+}
+#briefing-dialog > .dialog-top,
+#briefing-dialog > h2,
+#briefing-dialog > .briefing-entry,
+#briefing-dialog > .briefing-actions {
+  flex-shrink: 0;
+}
+#briefing-dialog h2 {
+  font-size: 34px;
+  margin: 8px 0 14px;
+}
+#briefing-dialog .briefing-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+#briefing-dialog .briefing-objectives article {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-content: start;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+#briefing-dialog .briefing-objectives h3 {
+  margin: 0;
+}
+#briefing-dialog .briefing-objectives p {
+  grid-column: 1/-1;
+}
+#briefing-dialog .briefing-roles {
+  gap: 20px;
+  padding: 12px 0;
+}
+#briefing-dialog .briefing-details {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+#briefing-dialog .briefing-details > summary,
+#waiting-banner .lobby-settings > summary {
+  padding: 9px 0;
+  font: 700 16px/1.4 var(--body);
+  cursor: pointer;
+}
+#briefing-dialog .briefing-upgrade-note {
+  font: var(--guide-body-size)/1.5 var(--body);
+  margin: 6px 0 14px;
+}
+#briefing-dialog .briefing-entry {
+  padding: 12px 0;
+  gap: 20px;
+}
+#briefing-dialog #briefing-destination {
+  font-size: 16px;
+}
+#briefing-dialog .briefing-actions {
+  padding-top: 0;
+}
+
+/* Team and role choices fit together; long XXL rosters scroll independently. */
+#game[data-mode] #waiting-banner {
+  top: calc(64px + env(safe-area-inset-top, 0px));
+  bottom: auto;
+  width: min(1120px, calc(100% - 28px));
+  max-height: calc(
+    100dvh - 120px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+  );
+  padding: 14px 18px;
+}
+#waiting-banner .lobby-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 8px;
+}
+#waiting-banner .lobby-heading {
+  margin: 0;
+}
+#waiting-banner .lobby-heading strong {
+  font-size: 28px;
+}
+#waiting-banner .lobby-destination {
+  margin: 0;
+  padding: 6px 8px;
+  gap: 10px;
+}
+#waiting-banner .lobby-destination > img {
+  width: 76px;
+  height: 44px;
+}
+#waiting-banner .lobby-destination #lobby-map-name {
+  font-size: 26px;
+}
+#waiting-banner .lobby-readiness {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 7px 12px;
+}
+#waiting-banner .lobby-status-copy {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+}
+#waiting-banner #lobby-status-title {
+  font-size: 23px;
+}
+#waiting-banner #lobby-status-detail {
+  margin: 0;
+}
+#waiting-banner[data-ready='true'] #lobby-status-detail {
+  display: none;
+}
+#waiting-banner .lobby-room-meta {
+  padding: 6px 0;
+  border: 0;
+}
+#waiting-banner .lobby-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+#waiting-banner .lobby-main > section {
+  min-width: 0;
+}
+#waiting-banner .lobby-section-heading {
+  min-height: 36px;
+  margin: 4px 0 8px;
+}
+#waiting-banner .lobby-role-heading {
+  border: 0;
+  padding: 0;
+}
+#waiting-banner .lobby-section-heading h3 {
+  font-size: 24px;
+}
+#waiting-banner .lobby-roster {
+  gap: 10px;
+  margin: 0;
+}
+#waiting-banner .lobby-team {
+  padding: 9px;
+  background: #f1e6ff;
+  border-color: #b69ae8;
+  border-top-color: #8b4ef3;
+}
+#waiting-banner .lobby-team[data-team='1'] {
+  background: #fff0c2;
+  border-color: #edc48f;
+  border-top-color: #ff8b45;
+}
+#waiting-banner .lobby-team-heading b {
+  font-size: 22px;
+  color: #5522a3;
+}
+#waiting-banner .lobby-team[data-team='1'] .lobby-team-heading b {
+  color: #b9451f;
+}
+#waiting-banner .lobby-team-heading {
+  gap: 5px 9px;
+}
+#waiting-banner .lobby-team-heading b {
+  flex: 1 1 100%;
+}
+#waiting-banner .lobby-join-team {
+  min-height: 36px;
+  padding: 7px;
+  margin: 8px 0;
+}
+#waiting-banner .lobby-members {
+  height: 116px;
+  max-height: 116px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+#waiting-banner .lobby-member {
+  min-height: 34px;
+  padding: 6px 0;
+}
+#waiting-banner .role-choice {
+  min-height: 96px;
+  padding: 10px;
+}
+#waiting-banner .role-choice[aria-pressed='true'] {
+  padding: 9px;
+}
+#waiting-banner .role-choice em {
+  padding-top: 5px;
+}
+#waiting-banner #lobby-role-note {
+  margin: 8px 0 0 !important;
+}
+#waiting-banner .lobby-settings {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+#waiting-banner .lobby-settings > summary {
+  min-height: 40px;
+}
+#waiting-banner #lobby-rules {
+  margin: 4px 0 0;
+}
+@media (max-width: 900px) {
+  #waiting-banner .lobby-top,
+  #waiting-banner .lobby-main {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  #waiting-banner .lobby-top {
+    margin-bottom: 10px;
+  }
+  #waiting-banner .lobby-roster {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  #waiting-banner .lobby-destination {
+    flex-wrap: nowrap;
+  }
+  #waiting-banner .lobby-destination > img {
+    display: none;
+  }
+  #briefing-dialog[open] {
+    padding: 16px;
+  }
+}
+@media (max-width: 600px) {
+  #game[data-mode] #waiting-banner {
+    top: calc(52px + env(safe-area-inset-top, 0px));
+    padding: 12px;
+    max-height: calc(
+      100dvh - 102px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
+  }
+  #waiting-banner .lobby-readiness {
+    display: grid;
+    gap: 6px;
+  }
+  #waiting-banner #start-match {
+    margin: 0;
+  }
+  #waiting-banner .lobby-members {
+    height: 104px;
+    max-height: 104px;
+  }
+  #waiting-banner .lobby-member {
+    flex-wrap: wrap;
+    gap: 3px 5px;
+  }
+  #waiting-banner .lobby-member-name {
+    font-size: 14px;
+  }
+  #waiting-banner .lobby-member-tags {
+    flex: 1 1 100%;
+    max-width: none;
+    justify-content: flex-start;
+    padding-left: 23px;
+  }
+  #briefing-dialog .briefing-entry {
+    gap: 8px;
+    padding: 10px 0;
+  }
+  #briefing-dialog .briefing-actions {
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+  #briefing-dialog .briefing-actions > button {
+    flex: 1 1 0;
+    font-size: 14px;
+    padding: 10px;
+  }
+}

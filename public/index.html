@@ -260,23 +260,30 @@
           </button>
         </div>
       </div>
-      <div class="score-hud">
-        <div class="team-score mint">
-          <span>PURPLE PIXELS</span>
-          <div>
-            <strong id="score-0">0</strong><small class="score-target">/ 12 DATA</small
-            ><b id="lives-0">♛ ♛ ♛</b>
+      <div class="objective-hud">
+        <div class="score-hud">
+          <div class="team-score mint">
+            <span>PURPLE PIXELS</span>
+            <div>
+              <strong id="score-0">0</strong><small class="score-target">/ 12 DATA</small
+              ><b id="lives-0">♛ ♛ ♛</b>
+            </div>
+            <div class="score-track"><i id="progress-0"></i></div>
           </div>
-          <div class="score-track"><i id="progress-0"></i></div>
+          <div class="score-versus">VS</div>
+          <div class="team-score coral">
+            <span>SUNSET SYNDICATE</span>
+            <div>
+              <strong id="score-1">0</strong><small class="score-target">/ 12 DATA</small
+              ><b id="lives-1">♛ ♛ ♛</b>
+            </div>
+            <div class="score-track"><i id="progress-1"></i></div>
+          </div>
         </div>
-        <div class="score-versus">VS</div>
-        <div class="team-score coral">
-          <span>SUNSET SYNDICATE</span>
-          <div>
-            <strong id="score-1">0</strong><small class="score-target">/ 12 DATA</small
-            ><b id="lives-1">♛ ♛ ♛</b>
-          </div>
-          <div class="score-track"><i id="progress-1"></i></div>
+        <div class="gator-hud">
+          <span>← PURPLE</span>
+          <div><i id="gator-marker">◆</i></div>
+          <span>SUNSET →</span><small id="ride-route-label">GATOR GETAWAY</small>
         </div>
       </div>
       <div
@@ -294,17 +301,12 @@
       </div>
       <div id="match-announcement" class="match-announcement" hidden></div>
       <div id="game-feed" class="game-feed" aria-live="polite"></div>
-      <div class="gator-hud">
-        <span>← PURPLE</span>
-        <div><i id="gator-marker">◆</i></div>
-        <span>SUNSET →</span><small id="ride-route-label">GATOR GETAWAY</small>
-      </div>
       <div class="game-bottom">
         <div class="player-card">
           <span id="role-icon">♛</span>
           <div>
             <strong id="role-name">QUEEN LENNY</strong
-            ><small id="role-tip">Hold jump for AI1 flight. Protect your crown.</small>
+            ><small id="role-tip">Tap jump to flap. Protect your crown.</small>
           </div>
           <span id="carrying-tag" hidden>▣ DATA</span>
         </div>
@@ -321,10 +323,10 @@
             type="button"
             id="touch-jump"
             class="touch-button touch-jump"
-            aria-label="Jump. Hold to fly as a queen or warrior"
+            aria-label="Jump. Tap repeatedly to flap as a queen or warrior"
           >
             <span class="touch-button-icon" aria-hidden="true">↑</span
-            ><strong id="touch-jump-label">JUMP</strong><small>HOLD TO FLY</small>
+            ><strong id="touch-jump-label">JUMP</strong><small>TAP TO FLAP</small>
           </button>
           <button
             type="button"
@@ -373,12 +375,30 @@
         </div>
       </div>
       <div id="waiting-banner" class="waiting-banner" hidden>
-        <div class="lobby-heading">
-          <div>
-            <span class="eyebrow" id="lobby-team-label">BUILD YOUR CREW</span
-            ><strong>Room lobby</strong>
+        <div class="lobby-top">
+          <div class="lobby-heading">
+            <div>
+              <span class="eyebrow" id="lobby-team-label">BUILD YOUR CREW</span
+              ><strong>Room lobby</strong>
+            </div>
+            <button class="text-button" id="lobby-invite">COPY INVITE ⧉</button>
           </div>
-          <button class="text-button" id="lobby-invite">COPY INVITE ⧉</button>
+          <div class="lobby-destination">
+            <img
+              id="lobby-map-preview"
+              src="/assets/maps/miami.svg"
+              alt=""
+              width="160"
+              height="90"
+            />
+            <div>
+              <span class="eyebrow">DESTINATION</span><strong id="lobby-map-name">Miami</strong
+              ><small id="lobby-map-description">Classic · Gator</small>
+            </div>
+            <button type="button" class="button secondary" id="lobby-change-map">
+              CHANGE MAP ↗
+            </button>
+          </div>
         </div>
         <div class="lobby-readiness" role="status" aria-live="polite" aria-atomic="true">
           <div class="lobby-status-copy">
@@ -391,85 +411,86 @@
           <span id="lobby-leader">ROOM LEADER · Connecting…</span
           ><span id="lobby-population">PLAYERS · Connecting…</span>
         </div>
-        <div class="lobby-destination">
-          <img id="lobby-map-preview" src="/assets/maps/miami.svg" alt="" width="160" height="90" />
-          <div>
-            <span class="eyebrow">DESTINATION</span><strong id="lobby-map-name">Miami</strong
-            ><small id="lobby-map-description">Classic · Gator</small>
-          </div>
-          <button type="button" class="button secondary" id="lobby-change-map">CHANGE MAP ↗</button>
-        </div>
-        <div class="lobby-section-heading">
-          <h3>Pick your team</h3>
-        </div>
-        <div id="lobby-roster" class="lobby-roster" aria-label="Players in each team"></div>
-        <div class="lobby-section-heading lobby-role-heading">
-          <h3>Starting role</h3>
-          <button type="button" class="text-button lobby-help" data-help>How to play ↗</button>
-        </div>
-        <div class="role-options" aria-label="Your starting role">
-          <button
-            class="role-choice"
-            id="lobby-role-queen"
-            data-pick-role="queen"
-            aria-pressed="false"
-          >
-            <span class="role-symbol">♛</span
-            ><span><b>QUEEN</b><small>3 lives · Limited seats</small></span
-            ><em data-role-state="queen">TAKE THE CROWN</em>
-          </button>
-          <button
-            class="role-choice"
-            id="lobby-role-worker"
-            data-pick-role="worker"
-            aria-pressed="false"
-          >
-            <span class="role-symbol">▣</span
-            ><span><b>WORKER</b><small>Collect data · Ride the getaway</small></span
-            ><em data-role-state="worker">JOIN THE CREW</em>
-          </button>
-        </div>
-        <p id="lobby-role-note" class="role-selection-note" role="status">
-          Workers earn wings at AI1 stations.
-        </p>
-        <div class="lobby-bot-settings">
-          <div id="lobby-bot-count-control" class="lobby-bot-count-control" hidden>
-            <label for="lobby-bots">BOT CREW</label>
-            <div class="lobby-bot-count-actions">
-              <input
-                id="lobby-bots"
-                type="number"
-                inputmode="numeric"
-                min="0"
-                max="9"
-                step="1"
-                value="9"
-                aria-label="Number of bots"
-                aria-describedby="lobby-current-bot-count"
-              /><button type="button" class="button secondary" id="lobby-apply-bots">
-                UPDATE BOTS
+        <div class="lobby-main">
+          <section class="lobby-team-panel" aria-label="Choose a team">
+            <div class="lobby-section-heading">
+              <h3>Pick your team</h3>
+            </div>
+            <div id="lobby-roster" class="lobby-roster" aria-label="Players in each team"></div>
+          </section>
+          <section class="lobby-role-panel" aria-label="Choose a starting role">
+            <div class="lobby-section-heading lobby-role-heading">
+              <h3>Starting role</h3>
+              <button type="button" class="text-button lobby-help" data-help>How to play ↗</button>
+            </div>
+            <div class="role-options" aria-label="Your starting role">
+              <button
+                class="role-choice"
+                id="lobby-role-queen"
+                data-pick-role="queen"
+                aria-pressed="false"
+              >
+                <span class="role-symbol">♛</span
+                ><span><b>QUEEN</b><small>3 lives · Limited seats</small></span
+                ><em data-role-state="queen">TAKE THE CROWN</em>
+              </button>
+              <button
+                class="role-choice"
+                id="lobby-role-worker"
+                data-pick-role="worker"
+                aria-pressed="false"
+              >
+                <span class="role-symbol">▣</span
+                ><span><b>WORKER</b><small>Collect data · Ride the getaway</small></span
+                ><em data-role-state="worker">JOIN THE CREW</em>
               </button>
             </div>
-            <small id="lobby-current-bot-count">9 bots in this room</small>
-          </div>
-          <div class="lobby-difficulty-settings">
-            <label id="lobby-difficulty-control" for="lobby-bot-difficulty"
-              >BOT DIFFICULTY<select
-                id="lobby-bot-difficulty"
-                data-room-difficulty
-                aria-describedby="lobby-difficulty-description"
+            <p id="lobby-role-note" class="role-selection-note" role="status">
+              Workers earn wings at AI1 stations.
+            </p>
+          </section>
+        </div>
+        <details class="lobby-settings">
+          <summary>Room settings · Bots &amp; difficulty</summary>
+          <div class="lobby-bot-settings">
+            <div id="lobby-bot-count-control" class="lobby-bot-count-control" hidden>
+              <label for="lobby-bots">BOT CREW</label>
+              <div class="lobby-bot-count-actions">
+                <input
+                  id="lobby-bots"
+                  type="number"
+                  inputmode="numeric"
+                  min="0"
+                  max="9"
+                  step="1"
+                  value="9"
+                  aria-label="Number of bots"
+                  aria-describedby="lobby-current-bot-count"
+                /><button type="button" class="button secondary" id="lobby-apply-bots">
+                  UPDATE BOTS
+                </button>
+              </div>
+              <small id="lobby-current-bot-count">9 bots in this room</small>
+            </div>
+            <div class="lobby-difficulty-settings">
+              <label id="lobby-difficulty-control" for="lobby-bot-difficulty"
+                >BOT DIFFICULTY<select
+                  id="lobby-bot-difficulty"
+                  data-room-difficulty
+                  aria-describedby="lobby-difficulty-description"
+                >
+                  <option value="easy">Easy</option>
+                  <option value="normal" selected>Normal</option>
+                  <option value="hard">Hard</option>
+                </select></label
               >
-                <option value="easy">Easy</option>
-                <option value="normal" selected>Normal</option>
-                <option value="hard">Hard</option>
-              </select></label
-            >
-            <div>
-              <strong id="lobby-difficulty-title">NORMAL BOTS</strong
-              ><small id="lobby-difficulty-description">Balanced team play</small>
+              <div>
+                <strong id="lobby-difficulty-title">NORMAL BOTS</strong
+                ><small id="lobby-difficulty-description">Balanced team play</small>
+              </div>
             </div>
           </div>
-        </div>
+        </details>
         <p id="lobby-rules" class="lobby-rules">
           Three ways to win. Queen slots scale with crew size.
         </p>
@@ -620,59 +641,65 @@
         </button>
       </div>
       <h2 id="briefing-title" tabindex="-1">Three ways to win.</h2>
-      <div class="briefing-objectives">
-        <article>
-          <span aria-hidden="true">▣</span>
-          <h3>DATA</h3>
-          <p>
-            Workers carry chips from supply piles to HQ. Fill your vault to win.<b
-              ><span data-score-target-mode="normal">12</span>+ chips per team. More players, bigger
-              target.</b
-            >
-          </p>
-        </article>
-        <article>
-          <span aria-hidden="true">♛</span>
-          <h3>MILITARY</h3>
-          <p>Eliminate every enemy Queen. Protect yours.<b>3 lives per Queen.</b></p>
-        </article>
-        <article>
-          <span aria-hidden="true">≈</span>
-          <h3>RIDE GETAWAY</h3>
-          <p>
-            Workers <span class="keyboard-only">press E</span
-            ><span class="touch-only-inline">tap ACTION</span> beside the ride to board.<b
-              >Reach your team’s finish arch.</b
-            >
-          </p>
-        </article>
-      </div>
-      <div class="briefing-roles">
-        <p>
-          <strong>♛ QUEEN</strong> Fly, fight from above, claim stations. Choose before the round: 1
-          Queen per 5 teammates.
-        </p>
-        <p>
-          <strong>▣ WORKER → ⚔ WARRIOR</strong> Bring 1 chip into a neutral or friendly AI1 station
-          and <span class="keyboard-only">press E</span
-          ><span class="touch-only-inline">tap ACTION</span>. Stay still to install: wings give
-          flight, lightning gives speed. Defeat removes upgrades.
-        </p>
-      </div>
-      <div class="briefing-keys keyboard-only">
-        <span><kbd>A</kbd><kbd>D</kbd> Move</span><span><kbd>SPACE</kbd> Jump / hold to fly</span
-        ><span><kbd>E</kbd> Station / ride</span><span><kbd>S</kbd><kbd>SHIFT</kbd> Queen dive</span
-        ><span><kbd>S</kbd> Drop through</span
-        ><span><kbd>TAB</kbd> Crew names / scores · <kbd>ESC</kbd> Menu</span>
-      </div>
-      <div class="touch-guide touch-only" aria-label="Touch controls guide">
-        <strong>PORTRAIT OR LANDSCAPE. THUMBS READY.</strong>
-        <div>
-          <span><b>RIGHT STICK</b> Move left / right. Pull down to dive or drop.</span
-          ><span><b>JUMP · LEFT</b> Tap to jump. Hold to fly with wings or a crown.</span
-          ><span><b>ACTION · LEFT</b> Use AI1 stations or hop on your map’s ride.</span
-          ><span><b>CREW</b> See player names, data delivered, and knockouts.</span>
+      <div class="briefing-content">
+        <div class="briefing-objectives">
+          <article>
+            <span aria-hidden="true">▣</span>
+            <h3>DATA</h3>
+            <p>
+              Workers fill HQ with chips.<b
+                ><span data-score-target-mode="normal">12</span>+ wins. More players, bigger
+                target.</b
+              >
+            </p>
+          </article>
+          <article>
+            <span aria-hidden="true">♛</span>
+            <h3>MILITARY</h3>
+            <p>Eliminate every enemy Queen.<b>3 lives each. Protect yours.</b></p>
+          </article>
+          <article>
+            <span aria-hidden="true">≈</span>
+            <h3>RIDE GETAWAY</h3>
+            <p>
+              Workers <span class="keyboard-only">press E</span
+              ><span class="touch-only-inline">tap ACTION</span> beside the ride to board.<b
+                >Reach your team’s finish arch.</b
+              >
+            </p>
+          </article>
         </div>
+        <div class="briefing-roles">
+          <p><strong>♛ QUEEN</strong> Tap jump to flap. Fight from above and claim AI1 stations.</p>
+          <p>
+            <strong>▣ WORKER</strong> Collect chips, pilot rides, or spend 1 chip at AI1 to earn
+            wings.
+          </p>
+        </div>
+        <details class="briefing-details">
+          <summary>Controls &amp; upgrades</summary>
+          <p class="briefing-upgrade-note">
+            Queens are chosen before play: 1 per 5 teammates. Workers use a neutral or friendly AI1
+            station: wings give flight; lightning gives speed. Stay still to install. Defeat removes
+            upgrades.
+          </p>
+          <div class="briefing-keys keyboard-only">
+            <span><kbd>A</kbd><kbd>D</kbd> Move</span
+            ><span><kbd>SPACE</kbd> Jump / tap to flap</span><span><kbd>E</kbd> Station / ride</span
+            ><span><kbd>S</kbd><kbd>SHIFT</kbd> Queen dive</span
+            ><span><kbd>S</kbd> Drop through</span
+            ><span><kbd>TAB</kbd> Crew names / scores · <kbd>ESC</kbd> Menu</span>
+          </div>
+          <div class="touch-guide touch-only" aria-label="Touch controls guide">
+            <strong>PORTRAIT OR LANDSCAPE. THUMBS READY.</strong>
+            <div>
+              <span><b>RIGHT STICK</b> Move left / right. Pull down to dive or drop.</span
+              ><span><b>JUMP · LEFT</b> Tap to jump; tap again to flap with wings or a crown.</span
+              ><span><b>ACTION · LEFT</b> Use AI1 stations or hop on your map’s ride.</span
+              ><span><b>CREW</b> See player names, data delivered, and knockouts.</span>
+            </div>
+          </div>
+        </details>
       </div>
       <div class="briefing-entry">
         <label for="briefing-name"
@@ -701,9 +728,9 @@
           <span>♛</span>
           <h3>Queen</h3>
           <p>
-            Choose before the round: 1 Queen per 5 teammates. Hold
+            Choose before the round: 1 Queen per 5 teammates. Tap
             <span class="keyboard-only">jump</span><span class="touch-only-inline">JUMP</span> to
-            fly. <span class="keyboard-only">S or Shift</span
+            flap. <span class="keyboard-only">S or Shift</span
             ><span class="touch-only-inline">DIVE or stick down</span> dives in the air. Touch
             stations to claim them. Strike from above to defeat opponents. Each Queen has 3 lives;
             lose every Queen and your team loses.
@@ -724,8 +751,8 @@
           <span>⚔</span>
           <h3>Warrior</h3>
           <p>
-            Earn wings at AI1 during play. Fly and strike from above. Warriors cannot carry chips or
-            pilot rides. Defeat returns you to Worker and removes upgrades.
+            Earn wings at AI1 during play. Tap jump to flap and strike from above. Warriors cannot
+            carry chips or pilot rides. Defeat returns you to Worker and removes upgrades.
           </p>
         </article>
       </div>
@@ -736,7 +763,7 @@
       </div>
       <div class="key-guide keyboard-only">
         <span><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> Move</span
-        ><span><kbd>SPACE</kbd> / <kbd>W</kbd> Jump / hold to fly</span
+        ><span><kbd>SPACE</kbd> / <kbd>W</kbd> Jump / tap to flap</span
         ><span><kbd>E</kbd> / <kbd>J</kbd> Gate / ride interaction</span
         ><span><kbd>S</kbd> / <kbd>SHIFT</kbd> Queen dive</span
         ><span><kbd>S</kbd> / <kbd>↓</kbd> Drop through</span
@@ -749,7 +776,7 @@
         <div>
           <span
             ><b>RIGHT STICK</b> Drag left or right to move. Drag down to dive or drop through.</span
-          ><span><b>JUMP</b> Tap to jump. Hold to fly as a queen or warrior.</span
+          ><span><b>JUMP</b> Tap to jump; tap again to flap as a Queen or Warrior.</span
           ><span
             ><b>ACTION</b> Use an AI1 station while carrying a chip, or pilot the getaway
             ride.</span

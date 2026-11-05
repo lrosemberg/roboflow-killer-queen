@@ -5643,3 +5643,93 @@ body[data-touch='true'] textarea {
   padding: 5px 8px;
   font: 700 14px/1.2 var(--body);
 }
+
+/* Results stay readable on phones; the dialog scrolls instead of miniaturizing. */
+#results-dialog .results-topline .eyebrow {
+  font: 700 12px/1.4 var(--body);
+  letter-spacing: 0.5px;
+}
+#results-dialog .victory-banner {
+  font: 700 14px/1.3 var(--body);
+  letter-spacing: 0.5px;
+}
+#results-dialog .victory-banner span:last-child {
+  font-size: 12px;
+  white-space: nowrap;
+}
+#results-dialog .victory-headline {
+  font: 700 12px/1.5 var(--body) !important;
+  letter-spacing: 0.7px;
+}
+#results-dialog #winner-reason {
+  font-size: 16px;
+}
+#results-dialog #victory-actor {
+  font: 14px/1.5 var(--body);
+}
+#results-dialog .victory-objective h3 {
+  font: 700 14px/1.3 var(--body);
+  letter-spacing: 0;
+  margin-bottom: 10px;
+}
+#results-dialog .victory-objective > div {
+  font: 12px/1.4 var(--body);
+  gap: 8px;
+}
+#results-dialog .victory-objective strong {
+  font: 700 18px/1.3 var(--body);
+  font-variant-numeric: tabular-nums;
+}
+#results-dialog .victory-objective > small {
+  font: 700 11px/1.2 var(--body);
+  letter-spacing: 0.3px;
+}
+#results-dialog .victory-objective {
+  padding: 12px 12px 28px;
+}
+#results-dialog .victory-objective[data-winning='true'] {
+  padding: 11px 11px 27px;
+}
+#results-dialog .results-personal > span,
+#results-dialog .results-stats span {
+  font: 12px/1.4 var(--body);
+  letter-spacing: 0.3px;
+}
+#results-dialog .results-stats strong {
+  font-size: 32px;
+}
+#results-dialog .results-actions .button,
+#results-dialog #results-home {
+  min-height: 44px;
+  font: 700 14px/1.3 var(--body);
+  letter-spacing: 0.2px;
+}
+@media (max-width: 600px) {
+  #results-dialog .victory-objectives {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  #results-dialog .victory-objective > small {
+    left: 12px;
+  }
+  #results-dialog .results-personal {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 0;
+  }
+  #results-dialog .results-personal > span {
+    text-align: center;
+  }
+  #results-dialog .results-stats {
+    gap: 35px;
+  }
+  #results-dialog .results-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  #results-dialog .results-actions .button {
+    width: 100%;
+    padding: 10px 14px;
+  }
+}

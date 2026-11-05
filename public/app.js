@@ -1328,8 +1328,17 @@ function renderVictoryScene(now) {
   for (let i = 0; i < 5; i++) ctx.fillRect(200 - i * 18, 110 - i * 17, 200 + i * 36, 5);
   ctx.globalAlpha = 1;
   ctx.save();
-  ctx.translate(300, resultScene.type === 'gator' ? 115 : 124);
-  const scale = resultScene.type === 'gator' ? 1.35 : 2;
+  // Fit the complete animated composition, including Rio's crown feathers
+  // and the rider above each vehicle, with breathing room on both edges.
+  const bounds =
+      resultScene.type === 'gator'
+        ? { top: -82, bottom: 27, scale: 1.35 }
+        : resultScene.type === 'military'
+          ? { top: -68, bottom: -3, scale: 2 }
+          : { top: -57, bottom: 4, scale: 2 },
+    padding = 20,
+    scale = Math.min(bounds.scale, (canvas.height - padding * 2) / (bounds.bottom - bounds.top));
+  ctx.translate(canvas.width / 2, (canvas.height - (bounds.top + bounds.bottom) * scale) / 2);
   ctx.scale(scale, scale);
   const p = {
     x: -14,

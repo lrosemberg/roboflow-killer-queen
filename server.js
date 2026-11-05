@@ -755,7 +755,9 @@ export function createGameServer({
       role: p.role,
       x: Math.round(p.x * 10) / 10,
       y: Math.round(p.y * 10) / 10,
-      vx: p.vx,
+      // Match position precision on the wire. Full-precision decay stays in the
+      // simulation; sub-tenth velocity noise needlessly churns compression.
+      vx: Math.round(p.vx * 10) / 10,
       vy: Math.round(p.vy),
       facing: p.facing,
       grounded: p.grounded,
@@ -783,23 +785,31 @@ export function createGameServer({
       nextFlap: p.nextFlap || 0,
       nextDash: p.nextDash || 0,
       dashUntil: p.dashUntil || 0,
-      bumpVx: p.bumpVx || 0,
+      bumpVx: Math.round((p.bumpVx || 0) * 10) / 10,
     };
   }
-  function prepareSnapshot(r, now) {
+  function prepareSnapshot(r, now, formats = { legacy: true, compact: true }) {
     // Every recipient sees the same player objects. Serialize each only once per
     // tick, then select its JSON fragment for the recipient's interest window.
-    const players = [...r.players.values()].map(publicPlayer).map((p) => ({
-      ...p,
-      json: JSON.stringify(p),
-      compactJson: JSON.stringify(encodePlayer(p)),
-    }));
-    const berries = r.berries
-      .filter((b) => b.pileId === null)
-      .map((b) => ({
-        ...b,
-        json: JSON.stringify({ id: b.id, x: b.x, y: b.y, active: b.active, pileId: b.pileId }),
-      }));
+    const players = [...r.players.values()].map((player) => {
+      const p = publicPlayer(player);
+      const json = formats.legacy ? JSON.stringify(p) : null;
+      const compactJson = formats.compact ? JSON.stringify(encodePlayer(p)) : null;
+      return Object.assign(p, { json, compactJson });
+    });
+    const berries = [],
+      pileCounts = new Map();
+    // Count all stockpiles together instead of filtering the full finite stock
+    // once for each pile. Dropped resources retain the original wire schema.
+    for (const b of r.berries) {
+      if (b.active && b.pileId !== null)
+        pileCounts.set(b.pileId, (pileCounts.get(b.pileId) || 0) + 1);
+      if (b.pileId === null)
+        berries.push({
+          ...b,
+          json: JSON.stringify({ id: b.id, x: b.x, y: b.y, active: b.active, pileId: b.pileId }),
+        });
+    }
     const humanCount = players.reduce((count, p) => count + Number(!p.bot), 0);
     const head = JSON.stringify({
       type: 'state',
@@ -828,7 +838,7 @@ export function createGameServer({
       ),
       piles: r.map.berryPiles.map((pile) => ({
         ...pile,
-        remaining: r.berries.filter((b) => b.active && b.pileId === pile.id).length,
+        remaining: pileCounts.get(pile.id) || 0,
       })),
       status: r.status,
       startsAt: r.startsAt || 0,
@@ -854,7 +864,7 @@ export function createGameServer({
       hostId: r.hostId,
       remaining: null,
     }).slice(0, -1);
-    return { players, berries, head };
+    return { players, berries, head, packets: new Map() };
   }
   function sendSnapshot(r, c, cachedSnapshot = null, now = Date.now()) {
     const local = r.players.get(c.id);
@@ -865,7 +875,8 @@ export function createGameServer({
       skippedSnapshots++;
       return;
     }
-    const snapshot = cachedSnapshot || prepareSnapshot(r, now);
+    const snapshot =
+      cachedSnapshot || prepareSnapshot(r, now, { legacy: !c.compact, compact: c.compact });
     const visible =
       r.mode === 'xxl'
         ? snapshot.players.filter(
@@ -880,10 +891,20 @@ export function createGameServer({
             (b) => Math.abs(b.x - local.x) < 1100 && Math.abs(b.y - local.y) < 800,
           )
         : snapshot.berries;
-    const encoding = c.compact ? `,"encoding":"${COMPACT_PROTOCOL}"` : '';
-    const data = `${snapshot.head}${encoding},"ack":${local.ack},"players":[${visible.map((p) => (c.compact ? p.compactJson : p.json)).join(',')}],"berries":[${berries.map((b) => b.json).join(',')}]}`;
+    // Crowded clients often have the exact same view and input ack. Reuse the
+    // immutable UTF-8 packet for that snapshot only; each socket still owns its
+    // deflate dictionary and backpressure. No interest-window rounding/deltas.
+    const key = `${Number(c.compact)}/${local.ack}/${visible.map((p) => p.id).join(',')}/${berries.map((b) => b.id).join(',')}`;
+    let data = snapshot.packets.get(key);
+    if (!data) {
+      const encoding = c.compact ? `,"encoding":"${COMPACT_PROTOCOL}"` : '';
+      data = Buffer.from(
+        `${snapshot.head}${encoding},"ack":${local.ack},"players":[${visible.map((p) => (c.compact ? p.compactJson : p.json)).join(',')}],"berries":[${berries.map((b) => b.json).join(',')}]}`,
+      );
+      snapshot.packets.set(key, data);
+    }
     snapshotSending.add(socket);
-    socket.send(data, { compress: true }, () => snapshotSending.delete(socket));
+    socket.send(data, { compress: true, binary: false }, () => snapshotSending.delete(socket));
   }
   function win(r, team, type, actor, now) {
     if (r.status !== 'playing') return;
@@ -1484,16 +1505,18 @@ export function createGameServer({
     const t0 = performance.now();
     const now = Date.now();
     for (const r of rooms.values()) {
-      const recipients = humans(r);
+      const recipients = humans(r)
+        .map((p) => clients.get(p.id))
+        .filter(Boolean);
       if (!recipients.length) {
         r.events = [];
         continue;
       }
-      const snapshot = prepareSnapshot(r, now);
-      for (const p of recipients) {
-        const c = clients.get(p.id);
-        if (c) sendSnapshot(r, c, snapshot, now);
-      }
+      const snapshot = prepareSnapshot(r, now, {
+        legacy: recipients.some((c) => !c.compact),
+        compact: recipients.some((c) => c.compact),
+      });
+      for (const c of recipients) sendSnapshot(r, c, snapshot, now);
       r.events = [];
     }
     lastSnapshotMs = performance.now() - t0;

@@ -5,6 +5,8 @@ import { decodeSnapshot } from '../shared/protocol.js';
 
 // Usage: node scripts/remote-load-test.mjs https://your-game [report.json]
 // Run internet-smoke.mjs first. This test owns one new private room only.
+// DURATION_MS explicitly permits 2–120 seconds (default 12s); total deadline also
+// includes bounded join ramp, countdown, stop acknowledgements and cleanup.
 if (!process.argv[2]) throw new Error('Provide the explicit http:// or https:// game URL to test.');
 const base = new URL(process.argv[2]);
 if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password)
@@ -13,14 +15,25 @@ const target = new URL('/ws', base);
 target.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
 target.searchParams.set('protocol', 'compact-v1');
 const players = Math.min(120, Math.max(2, Math.floor(Number(process.env.PLAYERS) || 120)));
-const durationMs = Math.min(15000, Math.max(2000, Number(process.env.DURATION_MS) || 12000));
+const durationMs = Math.min(120000, Math.max(2000, Number(process.env.DURATION_MS) || 12000));
 const rampBatchSize = Math.min(
   120,
   Math.max(1, Math.floor(Number(process.env.RAMP_BATCH_SIZE) || 12)),
 );
-const rampPauseMs = Math.max(0, Number(process.env.RAMP_PAUSE_MS) || 0);
+const rampPauseMs = Math.min(5000, Math.max(0, Number(process.env.RAMP_PAUSE_MS) || 0));
+const deadlineMs = Math.max(
+  60000,
+  durationMs + 45000 + Math.ceil(players / rampBatchSize) * rampPauseMs,
+);
+assert.ok(
+  deadlineMs <= 240000,
+  'Requested ramp and duration exceed the four-minute test bound. Reduce RAMP_PAUSE_MS or raise RAMP_BATCH_SIZE.',
+);
 const peers = [];
 const latencies = [];
+const snapshotGaps = [];
+const visiblePlayers = [];
+const serverTimingSamples = [];
 const timers = new Set();
 let cleanup = false;
 let measuring = false;
@@ -28,6 +41,7 @@ let deadlineExceeded = false;
 let measuredStart = 0;
 let decodedBytes = 0;
 let inputTimer;
+let healthTimer;
 let code;
 let stage = 'health';
 const result = {
@@ -36,6 +50,7 @@ const result = {
   success: false,
   requestedPlayers: players,
   requestedDurationSeconds: durationMs / 1000,
+  overallDeadlineSeconds: deadlineMs / 1000,
   joinRamp: { batchSize: rampBatchSize, pauseMs: rampPauseMs },
   note: 'Bounded synthetic clients from one machine through the supplied public or local route. Clients start at normal spawn positions and move via inputs; no teleportation or server internals. This does not measure Brazil/USA player latency, browser rendering, long-running stability, or 120 physical laptops. Health maxima are cumulative since server startup.',
 };
@@ -70,7 +85,7 @@ function fail(peer, message) {
 }
 
 async function connect(index, expectedRejection = false) {
-  if (deadlineExceeded) throw new Error('Overall 60-second test deadline exceeded');
+  if (deadlineExceeded) throw new Error('Overall test deadline exceeded');
   const ws = new WebSocket(target, {
     origin: base.origin,
     handshakeTimeout: 10000,
@@ -111,6 +126,10 @@ async function connect(index, expectedRejection = false) {
     peer.latest.set(message.type, message);
     if (message.type === 'error' && !expectedRejection) fail(peer, message.message);
     if (message.type === 'state' && measuring && !expectedRejection) {
+      const receivedAt = performance.now();
+      if (peer.lastStateAt) snapshotGaps.push(receivedAt - peer.lastStateAt);
+      peer.lastStateAt = receivedAt;
+      visiblePlayers.push(message.players.length);
       peer.states++;
       peer.maxAck = Math.max(peer.maxAck, message.ack || 0);
       peer.lastTick = message.tick;
@@ -165,10 +184,10 @@ const deadline = setTimeout(() => {
   deadlineExceeded = true;
   clearInterval(inputTimer);
   for (const peer of peers) {
-    fail(peer, 'overall 60-second test deadline exceeded');
+    fail(peer, 'overall test deadline exceeded');
     peer.ws.terminate();
   }
-}, 60000);
+}, deadlineMs);
 
 try {
   result.healthBefore = await json('/api/health');
@@ -220,6 +239,8 @@ try {
             .length === lobby.queenQuota[team],
       ),
   );
+  for (const peer of participants)
+    peer.role = selected.lobbyPlayers.find((player) => player.id === peer.id).role;
   result.lobby = {
     queenQuota: selected.queenQuota,
     selectedQueens: selected.lobbyPlayers.filter((player) => player.role === 'queen').length,
@@ -276,6 +297,18 @@ try {
   stage = 'measuring-match';
   measuring = true;
   measuredStart = performance.now();
+  healthTimer = setInterval(async () => {
+    try {
+      const health = await json('/api/health');
+      if (measuring)
+        serverTimingSamples.push({
+          lastTickMs: health.lastTickMs,
+          lastSnapshotMs: health.lastSnapshotMs,
+        });
+    } catch {
+      /* Endpoint validation still runs before/after load. */
+    }
+  }, 2000);
   inputTimer = setInterval(() => {
     const elapsed = performance.now() - measuredStart;
     for (const peer of participants) {
@@ -283,14 +316,15 @@ try {
         peer.skippedInputs++;
         continue;
       }
-      // Move inward from normal spawn positions; vary jumping and Queen dives.
+      // Ordinary movement from real spawns. Workers tap-jump; Queens stay grounded
+      // so this sustained transport test does not end by eliminating every crown.
       peer.send({
         type: 'input',
         seq: ++peer.seq,
         right: peer.team === 0,
         left: peer.team === 1,
-        jump: Math.floor(elapsed / 350 + peer.index) % 4 === 0,
-        dash: Math.floor(elapsed / 650 + peer.index) % 6 === 0,
+        jump: peer.role === 'worker' && Math.floor(elapsed / 350 + peer.index) % 4 === 0,
+        down: false,
         action: false,
       });
     }
@@ -309,6 +343,7 @@ try {
   await sleep(durationMs);
   measuring = false;
   clearInterval(inputTimer);
+  clearInterval(healthTimer);
   for (const timer of timers) clearTimeout(timer);
   const seconds = (performance.now() - measuredStart) / 1000;
   const wireBytes = participants.reduce(
@@ -322,6 +357,20 @@ try {
           2,
         )
       : null;
+  const distribution = (values) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const at = (q) =>
+      sorted.length
+        ? +sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))].toFixed(2)
+        : null;
+    return { samples: sorted.length, p50: at(0.5), p95: at(0.95), p99: at(0.99), max: at(1) };
+  };
+  result.serverTimingSamples = {
+    count: serverTimingSamples.length,
+    tickMs: distribution(serverTimingSamples.map((sample) => sample.lastTickMs)),
+    snapshotMs: distribution(serverTimingSamples.map((sample) => sample.lastSnapshotMs)),
+    note: 'HTTP samples of last timings every 2s, not every server callback. For exact loop percentiles use the isolated local load harness. Railway CPU/RSS must be obtained separately from service metrics.',
+  };
   result.measurement = {
     players: participants.length,
     durationSeconds: +seconds.toFixed(3),
@@ -343,10 +392,13 @@ try {
     decodedMegabytes: +(decodedBytes / 1024 / 1024).toFixed(2),
     socketReceivedMegabytes: +(wireBytes / 1024 / 1024).toFixed(2),
     meanSocketKbpsPerClient: +((wireBytes * 8) / players / seconds / 1000).toFixed(2),
+    snapshotGapMs: distribution(snapshotGaps),
+    visiblePlayersPerSnapshot: distribution(visiblePlayers),
     applicationPingMs: {
       samples: latencies.length,
       p50: percentile(0.5),
       p95: percentile(0.95),
+      p99: percentile(0.99),
       max: latencies.length ? +latencies.at(-1).toFixed(2) : null,
     },
   };
@@ -437,6 +489,7 @@ try {
   measuring = false;
   clearTimeout(deadline);
   clearInterval(inputTimer);
+  clearInterval(healthTimer);
   for (const timer of timers) clearTimeout(timer);
   for (const peer of peers) {
     // Closing a test client's socket removes only that player. Empty private rooms expire automatically.

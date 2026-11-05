@@ -14,8 +14,8 @@ async function client(port, protocol) {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws${query}`);
   const queue = [],
     pending = [];
-  ws.on('message', (bytes) => {
-    const packet = { message: JSON.parse(bytes), bytes: bytes.length };
+  ws.on('message', (bytes, isBinary) => {
+    const packet = { message: JSON.parse(bytes), bytes: bytes.length, isBinary };
     const index = pending.findIndex((entry) => entry.matches(packet.message));
     if (index >= 0) {
       const [entry] = pending.splice(index, 1);
@@ -201,4 +201,61 @@ test('unknown protocol requests safely retain legacy snapshots', async (t) => {
   assert.equal(message.encoding, undefined);
   assert.equal(message.players[0].id, peer.id);
   assert.strictEqual(decodeSnapshot(message), message);
+});
+
+test('wire velocities use tenth-pixel precision without changing authoritative movement', async (t) => {
+  const { legacy, compact, room } = await roomWithBothProtocols(t);
+  const player = room.players.get(legacy.id);
+  player.vx = 123.456789;
+  player.bumpVx = -65.432198;
+  const normal = await legacy.wait('state', (s) =>
+    s.players.some((p) => p.id === player.id && p.vx === 123.5),
+  );
+  const packed = await compact.wait('state', (s) => s.time === normal.message.time);
+  assert.equal(packed.isBinary, false, 'Buffer reuse still sends browser-compatible text frames');
+  const { encoding, ...decoded } = decodeSnapshot(packed.message);
+  assert.deepEqual(decoded, normal.message);
+  assert.equal(decoded.players.find((p) => p.id === player.id).bumpVx, -65.4);
+  assert.equal(player.vx, 123.456789);
+  assert.equal(player.bumpVx, -65.432198);
+});
+
+test('reused compact packets preserve each exact XXL view and recipient acknowledgement', async (t) => {
+  const game = createGameServer({ port: 0, host: '127.0.0.1', countdownMs: 1000 });
+  const { port } = await game.listen();
+  t.after(() => game.close());
+  const peers = [];
+  let code;
+  for (let i = 0; i < 4; i++) {
+    const peer = await client(port, COMPACT_PROTOCOL);
+    peers.push(peer);
+    peer.send(
+      i === 0
+        ? { type: 'create', mode: 'xxl', private: true, botCount: 0, role: 'queen' }
+        : { type: 'join', code, role: i === 1 ? 'queen' : 'worker' },
+    );
+    const { message } = await peer.wait('joined');
+    code = message.code;
+  }
+  peers[0].send({ type: 'start' });
+  await peers[0].wait('state', (s) => s.status === 'playing');
+  const room = game.rooms.get(code);
+  const xs = [1000, 1010, 6000, 1005],
+    acks = [10, 20, 10, 10];
+  peers.forEach((peer, i) =>
+    Object.assign(room.players.get(peer.id), { x: xs[i], y: 500, ack: acks[i] }),
+  );
+  const packets = await Promise.all(
+    peers.map((peer, i) => peer.wait('state', (s) => s.ack === acks[i])),
+  );
+  packets.forEach((packet, i) => {
+    assert.equal(packet.isBinary, false);
+    const decoded = decodeSnapshot(packet.message);
+    const expected = i === 2 ? [peers[2].id] : [peers[0].id, peers[1].id, peers[3].id];
+    assert.deepEqual(
+      decoded.players.map((p) => p.id),
+      expected,
+    );
+    assert.equal(decoded.ack, acks[i]);
+  });
 });

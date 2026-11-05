@@ -90,6 +90,14 @@ Pinch and double-tap page zoom are suppressed across home, menus, lobby and game
 
 Player labels default to your character and nearby humans. **All / Hide** preferences and the crew panel provide other name displays. The compact activity feed identifies pickups, deliveries and knockouts.
 
+## Connection recovery
+
+The server runs the authoritative simulation at 60 Hz and sends live snapshots at 20 Hz. Clients send changed controls immediately and refresh unchanged active controls every 250 ms; waiting rooms and result screens do not continuously upload blank controls. Idle room snapshots use 4 Hz, with prompt updates when the lobby changes.
+
+An unexpected disconnection reserves your seat for **15 seconds**. Reconnecting in the same tab restores the same player, team, role and current match state. Your character stops taking input but remains in the match and can still be defeated; the match does not pause. Leaving explicitly releases the seat immediately. A server restart ends in-memory rooms and recovery sessions.
+
+Slow connections skip outdated visual snapshots in favor of the newest state. Recent activity events have bounded replay and duplicate suppression. Critical map/control congestion triggers a fresh connection with a full room/map sync. Input queues are bounded so seconds-old movement is not replayed after congestion. These safeguards improve recovery; they cannot remove internet latency or guarantee uninterrupted play on a failing network. See the [measured 120-client tests](docs/PERFORMANCE.md).
+
 ## Host online
 
 This is a Node HTTP + WebSocket server, not a static website. Run one process/replica behind HTTPS with WebSocket upgrades forwarded for `/ws`. Rooms are in memory and reset when the process restarts; multiple replicas require shared room routing/state that this project does not implement.
@@ -115,6 +123,7 @@ node scripts/bot-balance-benchmark.mjs normal
 node scripts/pacing-benchmark.mjs --help
 node scripts/pacing-benchmark.mjs natural
 npm run loadtest
+node scripts/network-resilience-test.mjs scripts/network-resilience-report.json
 ```
 
 The test suite covers physics, navigation across map variants, economic scaling, map selection authorization, lobby/team capacity, bot decisions, combat, touch input, gestures, and network state. GitHub Actions runs it on Node 22 and 24.

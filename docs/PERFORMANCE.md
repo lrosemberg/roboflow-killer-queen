@@ -120,3 +120,35 @@ PLAYERS=120 DURATION_MS=60000 RAMP_BATCH_SIZE=12 RAMP_PAUSE_MS=100 node scripts/
 ```
 
 The remote harness creates its own private room, joins through the public protocol, starts from ordinary spawns, sends inputs, and leaves afterward. It does not teleport players or control their distribution. Its HTTP timing samples are observations of the latest callback every two seconds, not full callback percentiles. Collect Railway CPU/RSS and network metrics over the same interval, plus actual player measurements in the intended regions. A successful short synthetic run still does not certify sustained 120-device play.
+
+## Connection resilience: release 1.3.0
+
+This release addresses failure recovery as well as capacity. Inputs are sent on transitions plus a 250 ms active keepalive; the browser retains at most 24 short transitions, stops queueing above 4 KiB of socket backlog, and replaces a transport stalled for 250 ms instead of replaying old controls. Lobby/results do not periodically send blank input. An eight-second handshake or state watchdog replaces a stalled connection, with bounded retry delay. A tab displaced by another tab stops automatically reconnecting.
+
+A private 256-bit session capability reserves a disconnected player's seat for 15 seconds. It remains stable during recovery so a lost resume response cannot strand the player, and is invalidated on explicit leave or expiry. The same player object is restored, including current role, lives, scores and upgrades. Inputs are cleared and the character remains vulnerable during the interruption; the world continues. These are in-memory sessions, not persistence across server restarts.
+
+Live state remains authoritative and replaceable. Each room retains the latest 256 activity events with per-client acknowledgement and duplicate suppression before visual/audio effects. A prolonged gap can exceed that bounded history: the latest scores, lives and map recover, but the entire historical activity feed is not guaranteed. A congested critical control message closes the transport for full room/map resynchronization instead of silently discarding it. Idle room snapshots run at 4 Hz; live gameplay stays at 20 Hz with 60 Hz physics.
+
+### Failure-injection checks
+
+The isolated `network-resilience-test.mjs` completed all eight phases with **120 actual localhost WebSocket connections**. It recovered 24 role events after deliberately skipping snapshots, resumed full map geometry after a synthetic 300 KiB control backlog, preserved three reconnecting identities while rejecting a 121st player, released exactly one expired reservation, and recovered after an oversized input burst was deliberately rejected by the abuse limit. All 120 clients moved through acknowledged inputs. The final cleanup removed every test seat and room.
+
+The test uses deterministic application delivery/backpressure shims, not actual TCP packet loss. Its 4.215-second run shares one process between server and generator, so its approximately 60 Hz observation is **not a capacity benchmark**. Reported snapshot skips mostly come from the injected control failure; they are not a packet-loss rate. Separate server regressions verify that a disconnected Queen can lose a life normally and resume that current defeated state.
+
+### Browser recovery with a full room
+
+A desktop browser joined a private XXL Brazil room alongside 119 synthetic WebSocket clients. Both reloading the tab and deliberately withholding its state/pong messages recovered the same player ID, team, role and three lives, with 120 seats preserved. The stale-open-connection test suppressed 164 messages; the browser replaced its transport after approximately **8.08 seconds** and resumed with a monotonically increasing input sequence. The UI returned to the running match without a stuck connection overlay or captured console errors. This tests one browser against synthetic peers, not 120 physical devices.
+
+### Sustained local protocol check
+
+A separate pre-release test ran 120 ordinary clients for **60 seconds**, using the same bounded input helper as the browser. All moved, received acknowledgements, remained connected and left cleanly; the 121st client was rejected. The lowest observed simulation rate was **59.97 Hz**, with **19.86 snapshots/client/second** on average. Input traffic averaged **4.19 messages/client/second**, compared with the previous fixed 30 Hz sender. This is a reduction in command count, not a claim of the same percentage reduction in total network bandwidth.
+
+Local RTT p95 was 9.04 ms; snapshot gap p95 was 52.95 ms and the maximum was 67.31 ms. Received wire traffic averaged 96.79 kbps/client. The process loaded package metadata before the version bump, so that local report's health endpoint says 1.2.1; the tested server contained the new recovery implementation. These localhost measurements cannot predict public-route latency. The prior public latency spikes above remain relevant until measured again.
+
+Reproduce the fault checks with:
+
+```sh
+node scripts/network-resilience-test.mjs scripts/network-resilience-report.json
+```
+
+The reports are `scripts/network-resilience-final.json`, `scripts/release-1.3.0-browser-recovery.json`, and `scripts/release-1.3.0-local-120-load.json`. They are ignored by Git. The fault report records stable source hashes. The browser QA server and its 119 synthetic clients were shut down after verification.

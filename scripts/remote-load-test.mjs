@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import WebSocket from 'ws';
 import { decodeSnapshot } from '../shared/protocol.js';
+import { NetworkInput } from '../public/network-input.js';
 
 // Usage: node scripts/remote-load-test.mjs https://your-game [report.json]
 // Run internet-smoke.mjs first. This test owns one new private room only.
@@ -14,6 +15,8 @@ if (!['http:', 'https:'].includes(base.protocol) || base.username || base.passwo
 const target = new URL('/ws', base);
 target.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
 target.searchParams.set('protocol', 'compact-v1');
+target.searchParams.set('resume', '1');
+target.searchParams.set('events', '1');
 const players = Math.min(120, Math.max(2, Math.floor(Number(process.env.PLAYERS) || 120)));
 const durationMs = Math.min(120000, Math.max(2000, Number(process.env.DURATION_MS) || 12000));
 const rampBatchSize = Math.min(
@@ -102,6 +105,11 @@ async function connect(index, expectedRejection = false) {
     maxAck: 0,
     maxMovement: 0,
     skippedInputs: 0,
+    inputMessages: 0,
+    eventAck: 0,
+    eventEpoch: null,
+    deliveredEvents: 0,
+    replayedEvents: 0,
   };
   peers.push(peer);
   peer.send = (message) => {
@@ -109,6 +117,25 @@ async function connect(index, expectedRejection = false) {
     ws.send(JSON.stringify(message));
     return true;
   };
+  peer.input = new NetworkInput({
+    isOpen: () => ws.readyState === WebSocket.OPEN,
+    bufferedAmount: () => ws.bufferedAmount,
+    onStall: () => fail(peer, 'upload queue stayed congested for 250 ms'),
+    send: (input) => {
+      const sent = peer.send({
+        type: 'input',
+        ...input,
+        seq: peer.seq + 1,
+        eventEpoch: peer.eventEpoch,
+        eventAck: peer.eventAck,
+      });
+      if (sent) {
+        peer.seq++;
+        peer.inputMessages++;
+      }
+      return sent;
+    },
+  });
   ws.on('error', (error) => fail(peer, error.message));
   ws.on('close', (status, reason) => {
     if (!cleanup && !peer.expectedClose)
@@ -124,6 +151,23 @@ async function connect(index, expectedRejection = false) {
     }
     if (measuring && !expectedRejection) decodedBytes += bytes.length;
     peer.latest.set(message.type, message);
+    if (message.type === 'joined') {
+      peer.eventEpoch = message.eventEpoch || message.code;
+      peer.eventAck = message.eventAck || 0;
+    }
+    if (message.type === 'state' && message.eventEpoch === peer.eventEpoch) {
+      peer.eventAck = Math.max(peer.eventAck, (message.eventFloor || 1) - 1);
+      const priorAck = peer.eventAck;
+      for (const event of message.events || []) {
+        if (event.id <= peer.eventAck) peer.replayedEvents++;
+        else {
+          peer.eventAck = event.id;
+          peer.deliveredEvents++;
+        }
+      }
+      if (peer.eventAck > priorAck)
+        peer.send({ type: 'event-ack', id: peer.eventAck, eventEpoch: peer.eventEpoch });
+    }
     if (message.type === 'error' && !expectedRejection) fail(peer, message.message);
     if (message.type === 'state' && measuring && !expectedRejection) {
       const receivedAt = performance.now();
@@ -312,15 +356,11 @@ try {
   inputTimer = setInterval(() => {
     const elapsed = performance.now() - measuredStart;
     for (const peer of participants) {
-      if (peer.ws.bufferedAmount > 256 * 1024) {
-        peer.skippedInputs++;
-        continue;
-      }
-      // Ordinary movement from real spawns. Workers tap-jump; Queens stay grounded
-      // so this sustained transport test does not end by eliminating every crown.
-      peer.send({
-        type: 'input',
-        seq: ++peer.seq,
+      if (peer.ws.bufferedAmount > 4096) peer.skippedInputs++;
+      // Same bounded input sender as the browser: transitions plus a 250 ms
+      // active keepalive. The 30 Hz sampling loop does not imply 30 Hz uploads.
+      // Workers tap-jump; Queens stay grounded to keep the load match running.
+      peer.input.update({
         right: peer.team === 0,
         left: peer.team === 1,
         jump: peer.role === 'worker' && Math.floor(elapsed / 350 + peer.index) % 4 === 0,
@@ -388,7 +428,15 @@ try {
     ).toFixed(2),
     playersWithMovement: participants.filter((peer) => peer.maxMovement > 25).length,
     playersWithAcknowledgedInputs: participants.filter((peer) => peer.maxAck > 0).length,
-    skippedInputsForBackpressure: participants.reduce((sum, peer) => sum + peer.skippedInputs, 0),
+    congestedInputSamples: participants.reduce((sum, peer) => sum + peer.skippedInputs, 0),
+    inputMessages: participants.reduce((sum, peer) => sum + peer.inputMessages, 0),
+    meanInputMessagesPerPlayerPerSecond: +(
+      participants.reduce((sum, peer) => sum + peer.inputMessages, 0) /
+      players /
+      seconds
+    ).toFixed(2),
+    deliveredEvents: participants.reduce((sum, peer) => sum + peer.deliveredEvents, 0),
+    deduplicatedReplayEvents: participants.reduce((sum, peer) => sum + peer.replayedEvents, 0),
     decodedMegabytes: +(decodedBytes / 1024 / 1024).toFixed(2),
     socketReceivedMegabytes: +(wireBytes / 1024 / 1024).toFixed(2),
     meanSocketKbpsPerClient: +((wireBytes * 8) / players / seconds / 1000).toFixed(2),
@@ -428,7 +476,7 @@ try {
   stage = 'stopping-inputs';
   await Promise.all(
     participants.map(async (peer) => {
-      peer.send({ type: 'input', seq: ++peer.seq });
+      peer.input.update({}, { reset: true, active: false });
       await wait(peer, 'state', (state) => state.ack >= peer.seq);
     }),
   );
@@ -492,7 +540,9 @@ try {
   clearInterval(healthTimer);
   for (const timer of timers) clearTimeout(timer);
   for (const peer of peers) {
-    // Closing a test client's socket removes only that player. Empty private rooms expire automatically.
+    // Explicit leave avoids retaining resume-enabled test seats during grace.
+    // A failure before this can reserve a seat for at most the bounded grace.
+    if (peer.ws.readyState === WebSocket.OPEN && peer.joined) peer.send({ type: 'leave' });
     for (const pending of peer.pending.splice(0)) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Test cleanup'));

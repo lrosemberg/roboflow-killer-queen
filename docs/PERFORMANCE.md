@@ -170,3 +170,37 @@ The 1.3.0 event counters included lobby/setup: 2.29 million duplicate event entr
 The remote harness now reports a separate latency budget (p95 input acknowledgement/RTT ≤200 ms and snapshot gap ≤150 ms), input acknowledgement ages, relative snapshot-age drift, event-loop delay, timestamped pings and explicitly scoped event counters. Its functional `success` flag alone must not be used as a low-lag certification.
 
 Artifacts: `scripts/release-1.3.0-public-120-load.json`, `release-1.3.0-public-120-diagnostic.json`, `release-1.3.0-public-verification.json`, `release-1.3.0-metrics-summary.json`, and the three `release-1.3.0-independent-*-probe.json` reports. The file named `independent-steady-probe` records **post-load idle** in its metadata; it did not overlap sustained load. All diagnostic clients closed afterward.
+
+## Final validation: release 1.3.1
+
+Deployment `b65b920d-9e92-444d-ae56-79216a07e4c2` published source commit `54e9de2`. Public asset hashes and health version matched. **185 tests passed**, including input-ack age recovery, and local/public two-client checks passed all ten destination/size combinations. The updated isolated 120-client fault harness passed nine phases, including an event intentionally left unprocessed, no repeated delivery over subsequent live states, and recovery of that event after a same-player resume.
+
+The browser now treats an active command unacknowledged for two seconds as a stalled transport even if snapshots continue arriving. Tracking is bounded and clears for inactive/dead/countdown/modal states and session replacement. This prevents continuing indefinitely on an ordered backlog; it does not erase latency or freeze the world during recovery.
+
+The final public run started at **17:26:37 UTC on November 5, 2026** and measured **120 seconds** with 120 synthetic clients, ordinary spawns/inputs and no bots. All moved, received acknowledgements, stayed connected and explicitly left; the 121st was rejected. Its separate functional and latency outcomes were:
+
+| Measure                                       | Result                                       |
+| --------------------------------------------- | -------------------------------------------- |
+| Functional capacity/recovery checks           | Passed                                       |
+| Measured latency budget                       | **Failed**                                   |
+| Simulation rate                               | Approximately 60 Hz                          |
+| Snapshots/client/second                       | 19.97 average; 19.96 minimum                 |
+| Snapshot skips during measured match          | **0** (counter stayed at 40 after join ramp) |
+| Input messages/client/second                  | 4.18                                         |
+| Input acknowledgement RTT p50 / p95 / maximum | 93.02 / **362.91** / **2,354.53 ms**         |
+| Application ping p50 / p95 / maximum          | 51.44 / **386.57** / **2,274.12 ms**         |
+| Snapshot gap p95 / maximum                    | 90.95 / 1,136.75 ms                          |
+| Relative snapshot-age drift p95 / maximum     | 198.77 / 1,839.88 ms                         |
+| Generator event-loop p95 / maximum            | 11.35 / 16.83 ms                             |
+| Event deliveries during measurement           | 66,720 aggregate; **zero repeated entries**  |
+| Received wire traffic                         | 81.96 kbps/client; 140.70 MiB total          |
+
+The final traffic sample was lower than the prior run, and duplicate event retransmissions were eliminated, but player visibility and network conditions differed. **Do not attribute the RTT improvement or entire bandwidth difference solely to this patch.** The 200 ms p95 input/RTT target still failed. The earlier 1.3.0 result with a 16.7-second maximum remains part of the evidence; no later run is used to erase it.
+
+The CLI load clients use the browser's input queue/keepalive helper, but do **not** run its renderer, prediction or automatic input-ACK reconnect guard. They intentionally stay connected to measure raw delivery latency. Browser recovery was tested separately in the full-room fixture and real-handler regressions. Therefore this does not certify the combined experience on 120 physical phones/laptops or all networks.
+
+Railway's trailing-hour summaries still included earlier releases, so their CPU maximum is not a release-specific peak; the latest zero-valued CPU buckets are not interpreted as zero processing cost. The largest memory sample in that window was 0.1471 GB. Public health reported active tick maximum 10.63 ms and snapshot callback maximum 9.94 ms since the deployment, neither of which measures asynchronous compression. No hardware/region change was made without evidence that it would fix the intermittent shared-path delays.
+
+The application remains available on Railway and as a local/LAN server. **Server capacity passed this bounded test; consistently low internet latency is not yet established.** Use independent client origins and actual intended devices to localize the remaining variation rather than assuming a larger hosting plan removes it.
+
+Final artifacts: `scripts/release-1.3.1-public-120-load.json`, `release-1.3.1-public-verification.json`, `release-1.3.1-metrics-summary.json`, `network-resilience-1.3.1.json`, and the local/public map and smoke reports. All test clients and temporary QA servers were cleaned up; the normal local game server remains available.

@@ -16,8 +16,10 @@ export function economyForPlayers(total) {
   );
   return {
     economyPlayerCount,
-    scoreTarget: Math.max(1, Math.ceil((12 * economyPlayerCount) / 10)),
-    resourceCount: Math.max(6, 6 * economyPlayerCount),
+    // Small crews keep the complete twelve-chip objective and enough stock
+    // for both teams plus upgrades. Larger crews scale from that same base.
+    scoreTarget: Math.max(12, Math.ceil((12 * economyPlayerCount) / 10)),
+    resourceCount: Math.max(60, 6 * economyPlayerCount),
   };
 }
 

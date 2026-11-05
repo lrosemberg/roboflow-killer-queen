@@ -1,4 +1,4 @@
-# Adding a Roboflow Rumble map
+# Adding a RoboQueen map
 
 The five playable destinations are Miami, San Francisco, New York, Brazil and Singapore. Each has a Classic layout and an XXL layout. They share authoritative rules and physics, but have distinct collision layouts, scenery, Queen accessories and ride characters.
 
@@ -21,17 +21,17 @@ The public factory is `createMap(mode, totalPlayers?, mapId = 'miami')`. Existin
 
 Add the new ID to `LAYOUTS` in `shared/world.js` and to its XXL station offsets. Keep the following invariants:
 
-| Property                | Classic                            | XXL                     |
-| ----------------------- | ---------------------------------- | ----------------------- |
-| World dimensions        | 1,440 × 820                        | 12,000 × 2,000          |
-| Capacity                | 10 total players                   | 120 total players       |
-| Supply locations        | 6 grouped piles                    | 12 grouped piles        |
-| Starting stock          | 6 chips per participant            | 6 chips per participant |
-| Per-team victory target | `ceil(12 × participants / 10)`     | The same formula        |
-| Queen quota             | One per five teammates, rounded up | The same formula        |
-| Ride route              | Symmetric ground route             | Symmetric ground route  |
+| Property                | Classic                                 | XXL                         |
+| ----------------------- | --------------------------------------- | --------------------------- |
+| World dimensions        | 1,440 × 820                             | 12,000 × 2,000              |
+| Capacity                | 10 total players                        | 120 total players           |
+| Supply locations        | 6 grouped piles                         | 12 grouped piles            |
+| Starting stock          | `max(60, 6 × participants)`             | `max(60, 6 × participants)` |
+| Per-team victory target | `max(12, ceil(12 × participants / 10))` | The same formula            |
+| Queen quota             | One per five teammates, rounded up      | The same formula            |
+| Ride route              | Symmetric ground route                  | Symmetric ground route      |
 
-Participants include humans and bots. The server recalculates the economy while waiting and freezes it from countdown through the results. Geography and theme must not change the economic formula, jump height, movement speed, Queen lives or ride pacing.
+Participants include humans and bots. A room with 1–10 participants needs 12 chips per team and starts with 60 chips; 20 participants need 24 per team with 120 in stock; 120 participants need 144 per team with 720 in stock. `economyPlayerCount` remains the actual roster count, including in small rooms. The server recalculates the economy while waiting and freezes it from countdown through the results. Geography and theme must not change the economic formula, jump height, movement speed, Queen lives or ride pacing.
 
 For Classic, `steps` lists four **left-side** ledges as `[x, y, width]`. The builder mirrors each across the arena, then adds both HQ roofs, the center roof and the central supply bridge. `home` is the left HQ x-coordinate; `roof`, `center` and `bridge` are `[x, width]`. `ground` contains four pile x-coordinates, while `raised` contains two pile x-coordinates on the supply bridge. Machines stand on real ledges and mirror across the map.
 

@@ -377,7 +377,7 @@ test('finite stockpiles stream counts, carried chips drop on death and deposits 
   for (const bot of r.players.values()) if (bot.bot) stop(bot);
   await start(a);
   const q = r.players.get(b.id);
-  const stock = r.players.size * 6,
+  const stock = Math.max(60, r.players.size * 6),
     target = r.map.scoreTarget;
   const state = await a.wait('state', (s) => s.status === 'playing');
   assert.equal(state.piles.length, 6);

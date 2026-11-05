@@ -115,8 +115,8 @@ try {
   assert.equal(joinedHost.room.botTarget, 0);
   assert.equal(joinedHost.map.width, 1440);
   assert.equal(joinedHost.map.height, 820);
-  assert.equal(joinedHost.map.scoreTarget, 2);
-  assert.equal(joinedHost.map.berrySpawns.length, 6);
+  assert.equal(joinedHost.map.scoreTarget, 12);
+  assert.equal(joinedHost.map.berrySpawns.length, 60);
   result.classicMap = {
     width: joinedHost.map.width,
     height: joinedHost.map.height,
@@ -126,8 +126,8 @@ try {
   const joinedGuest = await guest.wait('joined');
   assert.equal(joinedGuest.code, joinedHost.code);
   assert.equal(joinedGuest.players.filter((player) => !player.bot).length, 2);
-  assert.equal(joinedGuest.map.scoreTarget, 3);
-  assert.equal(joinedGuest.map.berrySpawns.length, 12);
+  assert.equal(joinedGuest.map.scoreTarget, 12);
+  assert.equal(joinedGuest.map.berrySpawns.length, 60);
   host.send({ type: 'role', role: 'queen' });
   guest.send({ type: 'role', role: 'queen' });
   const selected = await host.wait(
@@ -137,8 +137,8 @@ try {
       state.lobbyPlayers?.filter((player) => player.role === 'queen').length === 2,
   );
   assert.deepEqual(selected.queenQuota, [1, 1]);
-  assert.equal(selected.scoreTarget, 3);
-  assert.equal(selected.resourceCount, 12);
+  assert.equal(selected.scoreTarget, 12);
+  assert.equal(selected.resourceCount, 60);
   assert.equal(selected.economyPlayerCount, 2);
   result.classicMap.lobbyTargetAfterJoin = selected.scoreTarget;
   const listedRooms = await fetch(new URL('/api/rooms', base), {
@@ -154,8 +154,8 @@ try {
     (state) =>
       state.status === 'playing' && state.playerCount === 2 && state.time >= (state.startsAt || 0),
   );
-  assert.equal(playing.scoreTarget, 3);
-  assert.equal(playing.resourceCount, 12);
+  assert.equal(playing.scoreTarget, 12);
+  assert.equal(playing.resourceCount, 60);
   await guest.wait(
     'state',
     (state) => state.status === 'playing' && state.time >= (state.startsAt || 0),
@@ -211,8 +211,12 @@ try {
   guest.send({ type: 'leave' });
   await guest.wait('left');
   const afterDeparture = await host.wait('state', (state) => state.playerCount === 1);
-  assert.equal(afterDeparture.scoreTarget, 3, 'A departure must not lower the locked round target');
-  assert.equal(afterDeparture.resourceCount, 12);
+  assert.equal(
+    afterDeparture.scoreTarget,
+    12,
+    'A departure must not lower the locked round target',
+  );
+  assert.equal(afterDeparture.resourceCount, 60);
   assert.equal(afterDeparture.economyPlayerCount, 2);
   host.send({ type: 'leave' });
   await host.wait('left');
@@ -226,8 +230,8 @@ try {
     role: 'worker',
   });
   const xxl = await host.wait('joined');
-  assert.equal(xxl.map.scoreTarget, 2);
-  assert.equal(xxl.map.berrySpawns.length, 6);
+  assert.equal(xxl.map.scoreTarget, 12);
+  assert.equal(xxl.map.berrySpawns.length, 60);
   result.xxlMap = {
     width: xxl.map.width,
     height: xxl.map.height,

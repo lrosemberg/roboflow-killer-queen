@@ -55,6 +55,30 @@ test('the catalog exposes five playable maps and a future map that cannot become
   }
 });
 
+test('every city and size uses the full twelve-chip minimum, then scales larger crews proportionally', () => {
+  for (const definition of PLAYABLE_MAPS)
+    for (const mode of ['normal', 'xxl']) {
+      for (const [participants, target, stock] of [
+        [1, 12, 60],
+        [4, 12, 60],
+        [10, 12, 60],
+        [11, 14, 66],
+        [20, 24, 120],
+        [120, 144, 720],
+      ]) {
+        const map = createMap(mode, participants, definition.id);
+        assert.equal(
+          map.economyPlayerCount,
+          participants,
+          'Minimum goals must not inflate the reported roster',
+        );
+        assert.equal(map.scoreTarget, target);
+        assert.equal(map.resourceCount, stock);
+        assert.equal(map.berrySpawns.length, stock);
+      }
+    }
+});
+
 for (const mode of ['normal', 'xxl'])
   test(`${mode}: every city has a distinct deterministic layout and the same proportional economy`, () => {
     const shapes = new Set();

@@ -1543,7 +1543,7 @@ export function createGameServer({
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const game = createGameServer();
   const address = await game.listen();
-  console.log(`ROBOFLOW RUMBLE is live · http://localhost:${address.port}`);
+  console.log(`ROBOQUEEN is live · http://localhost:${address.port}`);
   for (const n of Object.values(networkInterfaces()).flat())
     if (n?.family === 'IPv4' && !n.internal)
       console.log(`LAN · http://${n.address}:${address.port}`);

@@ -38,6 +38,35 @@ async function setup(t, options = {}) {
   return { game, port, host: await connect(port), guest: await connect(port) };
 }
 
+test('small waiting crews keep twelve-chip goals and sixty-chip stock across bot and human roster changes', async (t) => {
+  const { port, host, guest } = await setup(t);
+  host.send({ type: 'create', mode: 'xxl', mapId: 'singapore', botCount: 0 });
+  const joined = await host.wait('joined');
+  assert.equal(joined.map.scoreTarget, 12);
+  assert.equal(joined.map.resourceCount, 60);
+  assert.equal(joined.map.economyPlayerCount, 1);
+  host.send({ type: 'bots', count: 3 });
+  const four = await host.wait('state', (s) => s.botCount === 3);
+  assert.equal(four.scoreTarget, 12);
+  assert.equal(four.resourceCount, 60);
+  assert.equal(four.economyPlayerCount, 4);
+  host.send({ type: 'bots', count: 0 });
+  await host.wait('state', (s) => s.botCount === 0);
+  guest.send({ type: 'join', code: joined.code, name: 'Friend' });
+  const two = await guest.wait('joined');
+  assert.equal(two.map.scoreTarget, 12);
+  assert.equal(two.map.resourceCount, 60);
+  assert.equal(two.map.economyPlayerCount, 2);
+  host.send({ type: 'start' });
+  await host.wait('state', (s) => s.status === 'playing');
+  const late = await connect(port);
+  late.send({ type: 'join', code: joined.code });
+  const locked = await late.wait('joined');
+  assert.equal(locked.map.scoreTarget, 12);
+  assert.equal(locked.map.resourceCount, 60);
+  assert.equal(locked.map.economyPlayerCount, 2);
+});
+
 test('lobby map changes require the leader, replace geometry for every peer, and preserve crew choices and economy', async (t) => {
   const { game, port, host, guest } = await setup(t);
   host.send({

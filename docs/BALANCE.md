@@ -1,6 +1,8 @@
-# Pacing validation
+# Pacing validation — historical baseline
 
-The pacing update lengthens collection journeys, slows the crocodile, and adds limited objective defense. It preserves the economic target of `ceil(12 × participants / 10)`, including bots. A four-participant room still needs five chips per team; a full Classic room needs 12 and a full XXL room needs 144.
+These measurements describe the earlier pacing release, before selectable destinations and the 12-chip minimum. Current RoboQueen rooms require `max(12, ceil(12 × participants / 10))` chips per team and have `max(60, 6 × participants)` chips in supply. The small-room samples below used five-chip goals and are retained as historical measurements, not current match-duration predictions.
+
+The pacing update lengthens collection journeys, slows the crocodile, and adds limited objective defense. It preserved the economic target of `ceil(12 × participants / 10)`, including bots. That version required five chips per team in a four-participant room, 12 in full Classic and 144 in full XXL.
 
 ## Changes
 

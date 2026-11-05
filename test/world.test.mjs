@@ -39,11 +39,16 @@ test('maps use finite grouped stockpiles, neutral wing/speed gates and scaled ob
       assert.ok(p.x >= 0 && p.x + p.w <= m.width && p.y > 0 && p.y + p.h <= m.height);
   }
 });
-test('economic goals and finite stock scale with participants rather than map size', () => {
+test('economic goals retain the twelve-chip minimum and scale above ten participants', () => {
   for (const [participants, target, stock] of [
-    [1, 2, 6],
-    [3, 4, 18],
+    [0, 12, 60],
+    [1, 12, 60],
+    [3, 12, 60],
+    [4, 12, 60],
+    [6, 12, 60],
+    [9, 12, 60],
     [10, 12, 60],
+    [11, 14, 66],
     [20, 24, 120],
     [21, 26, 126],
     [120, 144, 720],
@@ -70,7 +75,11 @@ test('economic goals and finite stock scale with participants rather than map si
       'Geometry does not dictate the objective',
     );
   }
-  assert.equal(economyForPlayers(0).scoreTarget, 1);
+  assert.deepEqual(economyForPlayers(0), {
+    economyPlayerCount: 0,
+    scoreTarget: 12,
+    resourceCount: 60,
+  });
 });
 test('workers have a single jump that can reach 180px platforms; tapping midair does not grant another', () => {
   const p = player();

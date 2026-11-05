@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import packageInfo from './package.json' with { type: 'json' };
 import {
   createMap,
   configureMapEconomy,
@@ -182,7 +183,7 @@ export function createGameServer({
       if (url.pathname === '/api/health')
         return json(res, 200, {
           ok: true,
-          version: '1.1.0',
+          version: packageInfo.version,
           rooms: rooms.size,
           players: clients.size,
           uptime: Math.round((Date.now() - startedAt) / 1000),

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meet the Night Crew · Miami Mayhem</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#161528;color:#f8f3e5;font:14px/1.5 system-ui,sans-serif}header{max-width:1240px;margin:auto;padding:28px 24px 16px;display:flex;justify-content:space-between;gap:30px;align-items:center}h1{font-size:28px;margin:0}p{margin:6px 0;color:#bcb6cc}a{color:#c5a9ff}nav{display:flex;gap:8px;flex-wrap:wrap;max-width:1240px;margin:auto;padding:0 24px 20px}button{font:600 12px ui-monospace,monospace;padding:10px 18px;border:1px solid #76638d;background:#28223d;color:#f8f3e5;cursor:pointer}button.active{background:#a78bfa;color:#201633}canvas{display:block;width:min(1200px,100%);height:auto;margin:auto;image-rendering:pixelated}footer{max-width:1240px;padding:20px 24px 32px;margin:auto;color:#bcb6cc;font-size:12px}
+</style></head><body>
+<header><div><h1>Meet the Night Crew</h1><p>Purple Pixels × Sunset Syndicate. Powered by AI1. Fueled by questionable decisions.</p></div><a href="/">Back to Miami Mayhem →</a></header>
+<nav aria-label="Animation state"><button data-state="walk" class="active">Walk · 8 frames</button><button data-state="idle">Idle</button><button data-state="flight">Jump / AI1 flight</button><button data-state="attack">Attack</button><button id="flip">Face left</button><button id="pause">Pause</button><button id="step">Next frame</button></nav>
+<canvas width="1200" height="840" aria-label="Six animated Lenny raccoons: purple and coral workers, captains and warriors, plus walking crocodile."></canvas>
+<footer>Lenny’s Miami Mayhem · Collect the data. Protect the crown. Catch a crocodile.</footer>
+<script type="module">
+import {drawRaccoon,drawGator,TEAM} from './sprites.js';
+const canvas=document.querySelector('canvas'),c=canvas.getContext('2d');let mode='walk',facing=1,paused=false,elapsed=0,last=performance.now();
+const roles=['worker','queen','warrior'],labels=['DATA RUNNER','CAPTAIN LENNY','AI1 WARRIOR'];
+const label=(s,x,y,size=13,color='#eae2fa')=>{c.fillStyle=color;c.font=`600 ${size}px ui-monospace,monospace`;c.textAlign='center';c.fillText(s,x,y);};
+for(const b of document.querySelectorAll('[data-state]'))b.onclick=()=>{mode=b.dataset.state;document.querySelectorAll('[data-state]').forEach(x=>x.classList.toggle('active',x===b));};
+document.querySelector('#flip').onclick=e=>{facing*=-1;e.target.textContent=facing===1?'Face left':'Face right';};
+document.querySelector('#pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Resume':'Pause';};
+document.querySelector('#step').onclick=()=>{paused=true;elapsed+=1/14;document.querySelector('#pause').textContent='Resume';};
+function draw(now){const dt=Math.min((now-last)/1000,.05);last=now;if(!paused)elapsed+=dt;c.imageSmoothingEnabled=false;c.fillStyle='#161528';c.fillRect(0,0,1200,840);
+for(let team=0;team<2;team++)for(let role=0;role<3;role++){
+  const x=12+role*400,y=team*270;const center=x+188;
+  c.fillStyle=team?'#322232':'#27213c';c.fillRect(x,y,376,252);c.fillStyle=TEAM[team].main;c.fillRect(x,y,376,3);
+  label(labels[role],center,y+29,15,TEAM[team].main);label(TEAM[team].name,center,y+48,10,'#bfb7cb');
+  c.fillStyle='#5a496d';c.fillRect(x+35,y+218,306,2);
+  const inAir=mode==='flight',walk=mode==='walk';const groundY=y+216;
+  const player={id:`lab-${team}-${role}`,name:'LENNY',x:center-14,y:groundY-36-(inAir?18+Math.sin(elapsed*3)*8:0),vx:walk?270:inAir?100:0,vy:inAir?-80:0,grounded:!inAir,facing,team,role:roles[role],carrying:role===0&&mode==='idle',attackUntil:mode==='attack'?10000+(1-(elapsed*2%1))*180:0};
+  drawRaccoon(c,player,elapsed,{scale:5.25,now:10000});
+  label(mode==='walk'?'● ● ● ● ● ● ● ●':mode.toUpperCase(),center,y+240,10,'#a097b2');
+}
+c.fillStyle='#223a35';c.fillRect(12,548,776,276);label('GATOR TAXI · YOUR RIDE IS HERE',400,581,15,'#bce39a');
+c.save();c.translate(395,712);c.scale(3,3);drawGator(c,{x:0,y:0,riderId:mode==='idle'?null:'lab'},elapsed,facing===1?1:0);c.restore();
+c.fillStyle='#5a7060';c.fillRect(48,773,706,2);label('Zero emissions. Questionable temperament.',400,803,12,'#b8d2c2');
+c.fillStyle='#27213c';c.fillRect(812,548,376,276);label('WALK CYCLE',1000,581,15,'#c9b0fc');
+for(let i=0;i<8;i++){const x=842+(i%4)*89,y=651+Math.floor(i/4)*96;drawRaccoon(c,{id:'cycle',x:x-14,y:y-36,team:0,role:'queen',vx:270,grounded:true,facing:1},i/14,{scale:1.9,now:10000});label(String(i+1),x,y+18,10,'#c7bcd6');}
+requestAnimationFrame(draw);}
+requestAnimationFrame(draw);
+</script></body></html>

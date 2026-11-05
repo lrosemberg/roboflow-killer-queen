@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+*.zip
+.DS_Store
+coverage/
+.railway/
+session-info.json
+screenshots/
+scripts/*.json
+scripts/*.txt
+work/

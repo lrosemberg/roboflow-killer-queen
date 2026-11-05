@@ -1,0 +1,23 @@
+{
+  "name": "lennys-miami-mayhem",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A Miami raccoon team arcade for 10–120 players, over LAN or the internet.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.mjs",
+    "loadtest": "node scripts/load-test.mjs",
+    "internet": "cloudflared tunnel --url http://localhost:8787 --no-autoupdate --protocol http2"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "railway": "^3.16.0"
+  }
+}

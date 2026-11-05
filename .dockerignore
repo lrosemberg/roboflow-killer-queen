@@ -1,0 +1,8 @@
+node_modules
+.git
+test
+scripts
+*.md
+*.log
+screenshots
+session-info.json

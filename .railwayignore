@@ -1,0 +1,8 @@
+node_modules/
+.git/
+screenshots/
+test/
+scripts/
+*.log
+*.zip
+session-info.json

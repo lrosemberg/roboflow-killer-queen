@@ -1,7 +1,7 @@
 import { Renderer, renderPreview } from './renderer.js';
 import { movePlayer, SCORE_TARGETS, BOT_DIFFICULTIES, economyForPlayers } from '/shared/world.js';
 import { decodeSnapshot } from '/shared/protocol.js';
-import { drawRaccoon, drawGator, drawData } from './sprites.js';
+import { drawRaccoon, drawRide, drawData } from './sprites.js';
 import { InputPrediction } from './prediction.js';
 import { ActivityFeed } from './activity-feed.js';
 import { TouchInput } from './touch-input.js';
@@ -10,6 +10,8 @@ import { bindPageGestureGuard } from './gesture-guard.js';
 import { getLobbyReadiness } from '/shared/lobby.js';
 import { queuePlayerInput, consumePlayerInput, resetPlayerInput } from '/shared/input-buffer.js';
 import { ScreenAwake, fullscreenElement, toggleGameFullscreen } from './screen-session.js';
+import { DEFAULT_MAP_ID, isMapId, getMapDefinition } from '/shared/maps.js';
+import { createMapPicker } from './map-picker.js';
 
 bindPageGestureGuard();
 const $ = (s) => document.querySelector(s);
@@ -40,6 +42,9 @@ const storage = {
     } catch {}
   },
 };
+let selectedMapId = isMapId(storage.get('rumble-map')) ? storage.get('rumble-map') : DEFAULT_MAP_ID;
+let mapPickers,
+  roomDestinationSignature = '';
 let socket,
   localId,
   room = null,
@@ -128,6 +133,123 @@ function updateCreateDifficulty() {
 }
 $('#create-bot-difficulty').value = validDifficulty(storage.get('mayhem-bot-difficulty', 'normal'));
 updateCreateDifficulty();
+
+function currentDestination() {
+  return getMapDefinition(map?.mapId || room?.mapId || selectedMapId);
+}
+function selectDestination(mapId) {
+  if (!isMapId(mapId)) return;
+  selectedMapId = mapId;
+  storage.set('rumble-map', mapId);
+  mapPickers?.home.update(mapId);
+  mapPickers?.create.update(mapId);
+  const destination = getMapDefinition(mapId);
+  $('#selected-map-note').textContent = `${destination.name} · ${destination.ride.name}`;
+  $('#destination-create').firstChild.textContent = `PLAY IN ${destination.name.toUpperCase()} `;
+  $('#create-map-detail').textContent = `Your getaway: ${destination.ride.name}`;
+  updateCreateSummary();
+}
+function updateCreateSummary() {
+  const destination = getMapDefinition(selectedMapId);
+  const mode = document.querySelector('input[name="create-mode"]:checked')?.value || selectedMode;
+  const count = Number($('#create-bot-count')?.value ?? savedBotCount(mode));
+  $('#create-room-summary').textContent =
+    `${destination.name} · ${mode === 'xxl' ? 'XXL' : 'Classic'} · ${count} bots + you`;
+}
+function updateRoomDestination() {
+  if (!room || !map) return;
+  const destination = currentDestination();
+  const canChange = room.hostId === localId && state?.status === 'waiting';
+  const signature = `${destination.id}:${room.mode}:${room.hostId}:${localId}:${state?.status}`;
+  if (signature === roomDestinationSignature) return;
+  roomDestinationSignature = signature;
+  $('#game').dataset.mapId = destination.id;
+  $('#match-destination').textContent = destination.name.toUpperCase();
+  $('#match-destination').title = `${destination.name} · ${destination.subtitle}`;
+  $('#lobby-map-name').textContent = destination.name;
+  $('#lobby-map-description').textContent =
+    `${room.mode === 'xxl' ? 'XXL' : 'Classic'} · ${destination.ride.name}`;
+  for (const id of ['#lobby-map-preview', '#menu-map-preview']) {
+    if ($(id).getAttribute('src') !== destination.preview) $(id).src = destination.preview;
+  }
+  $('#lobby-change-map').textContent = canChange ? 'CHANGE MAP ↗' : 'VIEW MAPS ↗';
+  $('#menu-map-name').textContent =
+    `${destination.name} · ${room.mode === 'xxl' ? 'XXL' : 'Classic'}`;
+  $('#menu-map-note').textContent = canChange
+    ? 'Change your room’s destination ↗'
+    : 'View the map lineup ↗';
+  $('#map-dialog-title').textContent = canChange
+    ? 'Choose the next destination.'
+    : 'The world is your arcade.';
+  $('#map-dialog-note').textContent = canChange
+    ? 'Choose a map for the whole room.'
+    : state?.status === 'playing' || state?.status === 'ended'
+      ? 'The leader can change maps after this round.'
+      : 'The room leader chooses the map.';
+  mapPickers?.lobby.update(destination.id, { disabled: !canChange });
+  $('#ride-route-label').textContent = `${destination.ride.name.toUpperCase()} GETAWAY`;
+  $('.gator-hud').setAttribute(
+    'aria-label',
+    `${destination.ride.name} progress toward each team’s goal`,
+  );
+  $('#touch-action').setAttribute(
+    'aria-label',
+    `Action. Use an AI1 station or ride the ${destination.ride.name}`,
+  );
+}
+function openMapSelection() {
+  if (!room) return;
+  updateRoomDestination();
+  showDialog('#map-dialog');
+}
+function changeRoomDestination(mapId) {
+  if (!isMapId(mapId) || room?.hostId !== localId || state?.status !== 'waiting') return;
+  if (mapId === room.mapId) return;
+  // The server confirms the change for the whole room before selection moves.
+  mapPickers.lobby.update(room.mapId, { disabled: true });
+  send({ type: 'map', mapId });
+}
+function receiveMapChange(data) {
+  if (!room || !data.map) return;
+  resetInput();
+  prediction.reset();
+  predicted = null;
+  correction = { x: 0, y: 0 };
+  accumulator = 0;
+  seenEvents.clear();
+  clearCountdown();
+  resetActivityFeed();
+  setScoreboard(false);
+  rolePickerSignature = '';
+  resultScene = null;
+  map = data.map;
+  room.mapId = data.mapId || map.mapId;
+  room.mapName = data.mapName || map.name;
+  room.mapRevision = data.mapRevision;
+  state = null;
+  roomDestinationSignature = '';
+  lastStatus = 'waiting';
+  gameRenderer.setMap(map);
+  gameRenderer.resize();
+  gameRenderer.setState(
+    {
+      players: data.players || [],
+      berries: [],
+      scores: [0, 0],
+      queenLives: [0, 0],
+      events: [],
+      time: Date.now(),
+      status: 'waiting',
+    },
+    localId,
+  );
+  $$('.score-target').forEach((el) => (el.textContent = `/ ${map.scoreTarget} DATA`));
+  $('#respawn-overlay').hidden = true;
+  if ($('#map-dialog').open) $('#map-dialog').close();
+  updateRoomDestination();
+  updateTouchControls();
+  toast(`Destination set: ${currentDestination().name}. Your crew is ready in the lobby.`);
+}
 
 function toast(message) {
   clearTimeout(toastTimer);
@@ -253,12 +375,13 @@ function joinAction(action) {
   $('#briefing-name').value = action.name || playerName();
   const mode = action.mode === 'xxl' ? 'XXL · up to 120 players' : 'Classic · 5 vs 5';
   const listed = action.type === 'join' ? publicRooms.find((r) => r.code === action.code) : null;
+  const destination = getMapDefinition(action.mapId || listed?.mapId || selectedMapId);
   $('#briefing-destination').textContent =
     action.type === 'create'
-      ? `${action.roomName} · ${mode} · ${action.botCount} ${difficultyName(action.botDifficulty)} bots · ${action.role === 'worker' ? 'Worker' : 'Queen'}`
+      ? `${destination.name} · ${action.roomName} · ${mode} · ${action.botCount} ${difficultyName(action.botDifficulty)} bots · ${action.role === 'worker' ? 'Worker' : 'Queen'}`
       : action.type === 'join'
-        ? `Joining room ${action.code}${listed ? ` · ${difficultyName(listed.botDifficulty)} bots` : ' · Bot level set by host'} · Be ready if the round is already live.`
-        : `Quick play · ${mode} · New rooms use ${difficultyName(action.botDifficulty)} bots.`;
+        ? `Joining room ${action.code}${listed ? ` · ${destination.name} · ${difficultyName(listed.botDifficulty)} bots` : ' · Map and bots chosen by the room leader'} · Be ready if the round is already live.`
+        : `Quick play · ${destination.name} · ${mode} · New rooms use ${difficultyName(action.botDifficulty)} bots.`;
   showDialog('#briefing-dialog');
   $('#briefing-title').focus({ preventScroll: true });
 }
@@ -350,11 +473,16 @@ function handleMessage(data) {
     case 'state':
       receiveState(decodeSnapshot(data));
       break;
+    case 'map-changed':
+      receiveMapChange(data);
+      break;
     case 'left':
       goHome();
       break;
     case 'error':
       toast(data.message);
+      roomDestinationSignature = '';
+      updateRoomDestination();
       if (room && !$('#connection-overlay').hidden)
         $('#disconnect-message').textContent = data.message;
       break;
@@ -380,6 +508,8 @@ function enterGame(data) {
   closeDialogs();
   room = { ...data.room, code: data.code, hostId: data.hostId };
   map = data.map;
+  room.mapId ||= map.mapId || DEFAULT_MAP_ID;
+  roomDestinationSignature = '';
   localId = data.id;
   state = null;
   predicted = null;
@@ -422,6 +552,7 @@ function enterGame(data) {
   $('#game-canvas').focus();
   unlockAudio();
   updateTouchLayout();
+  updateRoomDestination();
   for (const id of ['#menu-bots', '#lobby-bots']) {
     const field = $(id);
     field.max = room.maxPlayers - 1;
@@ -458,7 +589,7 @@ function receiveState(data) {
       serverTime: data.time,
       active: data.status === 'playing' && !countdownLocked(data),
       riding: data.gator.riderId === localId,
-      resetKey: room.code,
+      resetKey: `${room.code}:${room.mapRevision || 1}`,
     });
     if (
       before &&
@@ -473,6 +604,9 @@ function receiveState(data) {
   }
   state = data;
   room.hostId = data.hostId;
+  room.mapId = data.mapId || room.mapId;
+  room.mapName = data.mapName || room.mapName;
+  room.mapRevision = data.mapRevision || room.mapRevision;
   room.botDifficulty = validDifficulty(data.botDifficulty ?? room.botDifficulty);
   gameRenderer.setState(data, localId);
   if (data.status !== lastStatus) {
@@ -510,6 +644,8 @@ function receiveState(data) {
 }
 function updateHUD(player) {
   if (!state) return;
+  const destination = currentDestination();
+  updateRoomDestination();
   for (let t = 0; t < 2; t++) {
     $(`#score-${t}`).textContent = state.scores[t];
     $(`#progress-${t}`).style.width =
@@ -585,14 +721,14 @@ function updateHUD(player) {
           : player.upgradeUntil > Date.now() + serverOffset
             ? `Installing ${player.upgradeKind === 'speed' ? 'speed' : 'wings'}… Stay inside the AI1 station.`
             : state.gator.riderId === localId
-              ? 'Gator engaged. Jump to hop off.'
+              ? `${destination.ride.name} engaged. Jump to hop off.`
               : role === 'queen'
                 ? 'Hold jump to fly · S / Shift to dive · Touch gates to claim them'
                 : role === 'warrior'
                   ? 'Hold jump to fly · Attack by contact from above · Defend the crew'
                   : player.carrying
                     ? 'Deliver to HQ, or enter AI1 and press E to install an upgrade.'
-                    : `${player.speedBoost ? 'SPEED BOOST · ' : ''}Roboflow supply piles · E to ride gator / enter AI1`;
+                    : `${player.speedBoost ? 'SPEED BOOST · ' : ''}Roboflow supply piles · E for ${destination.ride.name} / AI1`;
     $('#carrying-tag').hidden = !player.carrying;
     $('#respawn-overlay').hidden = player.alive || state.status !== 'playing';
     if (touchEnabled)
@@ -601,7 +737,7 @@ function updateHUD(player) {
         .replace('S / Shift', 'DIVE or joystick ↓')
         .replace('Jump to hop off.', 'Tap JUMP to hop off.')
         .replace('press E', 'tap USE CHIP')
-        .replace('E to ride gator / enter AI1', 'ACTION for gator · Bring a chip to AI1');
+        .replace('E for ', 'ACTION for ');
     if (!player.alive) {
       const eliminated = Boolean(player.eliminated);
       $('#respawn-title').textContent = eliminated ? 'QUEEN ELIMINATED.' : 'YOU’VE BEEN BONKED.';
@@ -653,7 +789,7 @@ function activityCopy(entry) {
     case 'upgrade':
       return { action: entry.upgradeKind === 'speed' ? 'gained speed' : 'gained wings' };
     case 'ride':
-      return { action: 'rides the gator' };
+      return { action: `rides ${currentDestination().ride.name}` };
     case 'gate':
       return { action: 'claimed AI1' };
     default:
@@ -826,6 +962,7 @@ function renderRoleSelection() {
     me.team,
     me.role,
     room.mode,
+    room.mapId,
     room.botDifficulty,
     map.scoreTarget,
     map.economyPlayerCount,
@@ -853,14 +990,14 @@ function renderRoleSelection() {
           : 'JOIN THE CREW';
   }
   const note = !editable
-    ? 'Queen seats are locked during the round. Bring one chip inside a neutral or friendly AI1 station and press E to install wings. Defeated warriors return as workers.'
+    ? 'Roles are locked. Workers can earn wings at AI1 stations with one chip.'
     : unavailableQueen
-      ? `All ${quota} queen ${quota === 1 ? 'slot is' : 'slots are'} held by teammates. Choose worker, or ask someone to release their seat before the round.`
+      ? `All ${quota} Queen ${quota === 1 ? 'seat is' : 'seats are'} taken. Choose Worker.`
       : myQueen
-        ? `You hold a queen seat (${queens.length}/${quota} filled). Each queen has three lives; eliminate every enemy queen to win military.`
+        ? `Your Queen has 3 lives. Protect them.`
         : cpuQueen
-          ? `Queen seats: ${queens.length}/${quota}. You can replace a CPU queen before the round, or play as a worker.`
-          : `Queen seats: ${queens.length}/${quota}. Fill every available queen slot before starting; workers earn upgrades in the arena.`;
+          ? `You can take a bot’s Queen seat before the round.`
+          : `Queen seats: ${queens.length}/${quota}. Workers earn wings at AI1 stations.`;
   $('#lobby-role-note').textContent = note;
   $('#dialog-role-note').textContent = note;
   $('#lobby-team-label').textContent =
@@ -869,18 +1006,17 @@ function renderRoleSelection() {
   $('#role-dialog-title').textContent = editable
     ? 'Pick your starting role.'
     : 'Earn your next upgrade.';
-  const economyCrew = map.economyPlayerCount ?? state.playerCount + state.botCount;
   $('#lobby-rules').textContent =
-    `${room.mode === 'xxl' ? 'XXL' : 'CLASSIC'} · ${map.scoreTarget} data per team · ${economyCrew} players incl. bots · 1 queen per 5 teammates`;
+    `Win: ${map.scoreTarget} chips · all enemy Queens · your getaway home`;
   const readiness = getLobbyReadiness(roster),
     isLeader = room.hostId === localId;
   const leader = roster.find((p) => p.id === room.hostId),
     leaderName = leader?.name || 'the room leader';
-  $('#lobby-leader').textContent = `ROOM LEADER · ${leaderName}${isLeader ? ' · YOU' : ''}`;
+  $('#lobby-leader').textContent = `Leader: ${leaderName}${isLeader ? ' (you)' : ''}`;
   const humans = roster.filter((p) => !p.bot).length,
     bots = roster.length - humans;
   $('#lobby-population').textContent =
-    `${humans} PLAYER${humans === 1 ? '' : 'S'} · ${bots} BOT${bots === 1 ? '' : 'S'} · ${roster.length}/${room.maxPlayers} SLOTS`;
+    `${humans} player${humans === 1 ? '' : 's'} + ${bots} bot${bots === 1 ? '' : 's'} · ${roster.length}/${room.maxPlayers}`;
   const missing = readiness.teams
     .filter((t) => t.queens !== t.quota)
     .map((t) =>
@@ -899,12 +1035,13 @@ function renderRoleSelection() {
   $('#lobby-status-title').textContent = title;
   const explanation =
     readiness.reason === 'players'
-      ? `Both teams need at least one player or bot. ${isLeader ? 'Invite your friends or add bots below.' : 'Invite your friends or ask the leader to add bots.'}`
+      ? 'Add a player or bot to each team.'
       : readiness.reason === 'queens'
-        ? `${missing.join(' · ')}. Adjust your roles below.`
-        : 'Both teams and all Queen roles are ready. You do not need to fill every slot.';
-  $('#lobby-status-detail').textContent =
-    `${explanation} ${isLeader ? 'Only you, the room leader, can start the match.' : `Only ${leaderName}, the room leader, can start the match.`}`;
+        ? `${missing.join(' · ')}.`
+        : isLeader
+          ? 'Your crew is ready.'
+          : `${leaderName} will start the match.`;
+  $('#lobby-status-detail').textContent = explanation;
   $('#waiting-banner').dataset.ready = String(readiness.ready);
   const holder = $('#lobby-roster');
   holder.replaceChildren();
@@ -923,10 +1060,9 @@ function renderRoleSelection() {
     const name = document.createElement('b');
     name.textContent = TEAM_NAMES[t];
     const count = document.createElement('small');
-    count.textContent = `${stats.count}/${capacity} SLOTS · ${stats.humans} PLAYER${stats.humans === 1 ? '' : 'S'} + ${stats.bots} BOT${stats.bots === 1 ? '' : 'S'}`;
-    const workers = stats.count - stats.queens;
+    count.textContent = `${stats.count}/${capacity} players`;
     const crown = document.createElement('small');
-    crown.textContent = `${stats.queens}/${stats.quota} QUEEN${stats.quota === 1 ? '' : 'S'} · ${workers} WORKER${workers === 1 ? '' : 'S'}`;
+    crown.textContent = `${stats.queens}/${stats.quota} Queen${stats.quota === 1 ? '' : 's'}`;
     heading.append(name, count, crown);
     const join = document.createElement('button');
     join.type = 'button';
@@ -979,7 +1115,6 @@ function renderRoleSelection() {
           member.id === room.hostId ? 'LEADER' : '',
           member.id === localId ? 'YOU' : '',
           member.bot ? 'BOT' : '',
-          member.role === 'queen' ? 'QUEEN' : 'WORKER',
         ]
           .filter(Boolean)
           .join(' · ');
@@ -1034,14 +1169,15 @@ const VICTORY_COPY = {
     actor: 'delivered the winning data chip.',
   },
   gator: {
-    label: 'GATOR VICTORY',
-    headline: 'THE GETAWAY WAS A CROCODILE.',
-    reason: 'A worker rode the gator all the way into their team’s goal.',
-    actor: 'brought the getaway gator home.',
+    label: 'RIDE VICTORY',
+    headline: 'SLOW RIDE. BIG FINISH.',
+    reason: 'A worker brought the getaway ride all the way into their team’s finish arch.',
+    actor: 'brought the getaway ride home.',
   },
 };
 function showResults() {
   resetInput();
+  const destination = currentDestination();
   const winner = state.winner,
     type =
       state.winType ||
@@ -1051,13 +1187,23 @@ function showResults() {
         : /GATOR/.test(state.winReason)
           ? 'gator'
           : 'military'),
-    copy = VICTORY_COPY[type] || VICTORY_COPY.military;
+    copy =
+      type === 'gator'
+        ? {
+            ...VICTORY_COPY.gator,
+            label: `${destination.ride.name.toUpperCase()} VICTORY`,
+            reason: `A worker rode the ${destination.ride.name} all the way into their team’s finish arch.`,
+            actor: `brought the ${destination.ride.name} home.`,
+          }
+        : VICTORY_COPY[type] || VICTORY_COPY.military;
   const victory = state.victory || {},
     dialog = $('#results-dialog');
   dialog.dataset.victory = type;
   dialog.dataset.team = winner;
   dialog.dataset.outcome = predicted?.team === winner ? 'won' : 'lost';
   $('#victory-type').textContent = copy.label;
+  $('#victory-location').textContent = `${destination.name.toUpperCase()} · ROUND COMPLETE`;
+  $('#results-location').textContent = `YOUR ROUND IN ${destination.name.toUpperCase()}`;
   $('#victory-headline').textContent = copy.headline;
   $('#winner-title').textContent = `${TEAM_NAMES[winner] || 'THE CREW'} WIN!`;
   $('#winner-reason').textContent = copy.reason;
@@ -1089,7 +1235,7 @@ function showResults() {
     ],
     [
       'gator',
-      '≈ GATOR ROUTE',
+      `≈ ${destination.ride.name.toUpperCase()} ROUTE`,
       [
         `${Math.round(Math.max(0, -progress) * 100)}% HOME`,
         `${Math.round(Math.max(0, progress) * 100)}% HOME`,
@@ -1143,7 +1289,7 @@ function showResults() {
     bit.style.animationDelay = `-${(i % 8) * 0.3}s`;
     confetti.append(bit);
   }
-  resultScene = { type, team: winner, started: performance.now() };
+  resultScene = { type, team: winner, mapId: destination.id, started: performance.now() };
   $('#rematch').disabled = room.hostId !== localId;
   $('#rematch').textContent =
     room.hostId === localId ? 'NEXT ROUND LOBBY ↻' : 'WAITING FOR HOST’S NEXT ROUND';
@@ -1180,12 +1326,12 @@ function renderVictoryScene(now) {
     carrying: resultScene.type === 'economic',
   };
   if (resultScene.type === 'gator') {
-    drawGator(ctx, { x: 0, y: -2, riderId: 'winner' }, t, 1);
+    drawRide(ctx, { x: 0, y: -2, riderId: 'winner' }, t, team, resultScene.mapId);
     p.x = -14;
     p.y = -66;
-    drawRaccoon(ctx, p, t, { state: 'ride' });
+    drawRaccoon(ctx, p, t, { state: 'ride', mapId: resultScene.mapId });
   } else {
-    drawRaccoon(ctx, p, t, { state: 'idle' });
+    drawRaccoon(ctx, p, t, { state: 'idle', mapId: resultScene.mapId });
     if (resultScene.type === 'economic')
       for (let i = 0; i < 6; i++)
         drawData(ctx, (i < 3 ? -1 : 1) * (35 + (i % 3) * 18), -8 - (i % 3) * 12, t + i, 0.75);
@@ -1237,7 +1383,7 @@ function renderRooms(rooms) {
   const container = $('#room-list');
   if (!rooms.length) {
     container.innerHTML =
-      '<div class="empty-rooms"><span aria-hidden="true">☀</span><div><strong>Be the first on the beach.</strong><p>Create a room and choose your bot crew.</p></div><button class="text-button">CREATE ROOM ↗</button></div>';
+      '<div class="empty-rooms"><span aria-hidden="true">✳</span><div><strong>Start the next rumble.</strong><p>Choose a destination, create a room, and bring your crew.</p></div><button class="text-button">CREATE ROOM ↗</button></div>';
     container.querySelector('button').addEventListener('click', openCreate);
     return;
   }
@@ -1262,6 +1408,12 @@ function renderRooms(rooms) {
     info.append(title, mode, difficulty);
     const meta = document.createElement('div');
     meta.className = 'room-meta';
+    const destination = getMapDefinition(r.mapId);
+    const mapName = document.createElement('span');
+    mapName.className = 'room-map';
+    mapName.textContent = destination.name;
+    mapName.title = `${destination.name} · ${destination.subtitle}`;
+    row.dataset.mapId = destination.id;
     const occupancy = document.createElement('span');
     occupancy.className = 'room-occupancy';
     occupancy.textContent = `${r.players}/${r.maxPlayers} PLAYERS · ${r.bots || 0} BOTS`;
@@ -1270,7 +1422,7 @@ function renderRooms(rooms) {
     status.dataset.playing = String(r.status === 'playing');
     status.textContent =
       r.status === 'playing' ? 'IN PROGRESS' : r.status === 'ended' ? 'NEXT ROUND' : 'IN LOBBY';
-    meta.append(occupancy, status);
+    meta.append(mapName, occupancy, status);
     const join = document.createElement('button');
     join.textContent = r.players >= r.maxPlayers ? 'FULL' : 'JOIN ↗';
     join.disabled = r.players >= r.maxPlayers;
@@ -1299,6 +1451,7 @@ function openCreate() {
   range.dataset.mode = selectedMode;
   range.value = savedBotCount(selectedMode);
   syncBotRange();
+  selectDestination(selectedMapId);
   showDialog('#create-dialog');
 }
 async function copyInvite() {
@@ -1335,7 +1488,8 @@ function syncBotRange() {
   $('#bot-count-max').textContent = range.max;
   const { scoreTarget, economyPlayerCount } = economyForPlayers(Number(range.value) + 1);
   $('#create-economy-preview').textContent =
-    `Starting vault: ${scoreTarget} chips per team for ${economyPlayerCount} total players, including you and bots. Adjusts with the lobby crew.`;
+    `${scoreTarget} chips per team · ${economyPlayerCount} players, including bots`;
+  updateCreateSummary();
 }
 
 // Keyboard state is cleared on blur and dialogs, avoiding stuck movement in a live room.
@@ -1629,6 +1783,9 @@ $('#open-join').addEventListener('click', () => {
   refreshRooms();
 });
 $('#open-create').addEventListener('click', openCreate);
+$('#destination-create').addEventListener('click', openCreate);
+$('#lobby-change-map').addEventListener('click', openMapSelection);
+$('#menu-map').addEventListener('click', openMapSelection);
 $('#empty-create')?.addEventListener('click', openCreate);
 $('#create-form').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1636,6 +1793,7 @@ $('#create-form').addEventListener('submit', (e) => {
     type: 'create',
     name: playerName(),
     roomName: $('#create-name').value,
+    mapId: selectedMapId,
     mode: document.querySelector('input[name="create-mode"]:checked').value,
     private: $('#create-private').checked,
     botCount: +$('#create-bot-count').value,
@@ -1731,7 +1889,7 @@ $('#network-info').addEventListener('click', async () => {
 // Add selectable bots to both create and the host menu.
 const botToggle = $('#create-bots').closest('label');
 botToggle.outerHTML =
-  '<div class="bot-picker"><label for="create-bot-count">BOT CREW <strong><output id="bot-count-label">9</output> BOTS</strong></label><input type="range" id="create-bot-count" min="0" max="9" value="9"><div><span>0 · JUST FRIENDS</span><span id="bot-count-max">9</span></div><small>Add as many bots as you like. Friends take priority when the room fills up.</small><small id="create-economy-preview" aria-live="polite"></small></div>';
+  '<div class="bot-picker"><label for="create-bot-count">BOTS <strong><output id="bot-count-label">9</output></strong></label><input type="range" id="create-bot-count" min="0" max="9" value="9"><div><span>0</span><span id="bot-count-max">9</span></div><small>Friends can replace bots.</small><small id="create-economy-preview" aria-live="polite"></small></div>';
 $('#create-bot-count').value = savedBotCount('normal');
 syncBotRange();
 $('#create-bot-difficulty').addEventListener('change', updateCreateDifficulty);
@@ -1920,6 +2078,18 @@ setInterval(() => {
   if (socketReady) send({ type: 'ping', time: performance.now() });
 }, 1500);
 const hero = $('#hero-image');
+mapPickers = {
+  home: createMapPicker($('#home-map-picker'), { name: 'home-map', onSelect: selectDestination }),
+  create: createMapPicker($('#create-map-picker'), {
+    name: 'create-map',
+    onSelect: selectDestination,
+  }),
+  lobby: createMapPicker($('#lobby-map-picker'), {
+    name: 'lobby-map',
+    onSelect: changeRoomDestination,
+  }),
+};
+selectDestination(selectedMapId);
 function revealHero() {
   if (hero.naturalWidth) {
     hero.hidden = false;

@@ -9,25 +9,26 @@
     <meta name="theme-color" content="#173b35" />
     <meta
       name="description"
-      content="Lenny's Miami Mayhem. A multiplayer raccoon arcade: collect data, protect your queen, ride the gator. 10-player classics and 120-player XXL chaos."
+      content="RoboQueen. Lenny and the crew take on five destinations in a multiplayer raccoon arcade. Collect data, protect your queens, and ride home. Classic and 120-player XXL arenas."
     />
-    <title>Lenny's Miami Mayhem — A Roboflow Arcade</title>
+    <title>RoboQueen — Lenny’s Multiplayer Arcade</title>
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <main id="home">
       <header class="site-header">
-        <a class="brand" href="/" aria-label="Miami Mayhem home"
+        <a class="brand" href="/" aria-label="RoboQueen home"
           ><svg viewBox="0 0 32 32" aria-hidden="true">
             <path fill="currentColor" d="M4 3h7v4h10V3h7v10h3v13h-6v3H7v-3H1V13h3z" />
             <path fill="#d9edb0" d="M6 13h20v11h-6v3h-8v-3H6z" />
             <path fill="currentColor" d="M5 14h9v7H5zm13 0h9v7h-9zm-5 9h6v3h-6z" />
             <path fill="#fff9e9" d="M8 15h3v3H8zm13 0h3v3h-3z" /></svg
-          ><span>ROBOFLOW<span class="brand-sub">AFTER HOURS ARCADE</span></span></a
+          ><span>RoboQueen<span class="brand-sub">A ROBOFLOW ARCADE</span></span></a
         >
         <nav aria-label="Main navigation">
           <button class="nav-link active" data-scroll="home">The game</button
+          ><button class="nav-link" data-scroll="destinations">The maps</button
           ><button class="nav-link" data-scroll="rooms-section">Find a room</button
           ><button class="nav-link" data-help>How to play <span>↗</span></button>
         </nav>
@@ -41,14 +42,14 @@
 
       <section class="hero">
         <div class="hero-copy">
-          <div class="eyebrow"><span class="tiny-spark">✳</span> MIAMI, FLORIDA · AFTER HOURS</div>
-          <p class="lenny-intro">Lenny’s</p>
-          <h1>
-            MIAMI<br /><span>MAYHEM<span class="title-star">✳</span></span>
+          <div class="eyebrow"><span class="tiny-spark">✳</span> ONE CREW. A WORLD OF MAYHEM.</div>
+          <p class="lenny-intro">Lenny presents</p>
+          <h1 aria-label="RoboQueen">
+            Robo<br /><span>Queen<span class="title-star" aria-hidden="true">✳</span></span>
           </h1>
           <p class="hero-description">
-            Small raccoons. Big Florida energy.<br />Steal the data. Protect the queens. Ride the
-            gator.
+            Small raccoons. Worldwide trouble.<br />Collect the data. Protect your queens. Bring
+            your crew.
           </p>
           <label class="name-field"
             >YOUR PLAYER NAME<input
@@ -72,25 +73,25 @@
         <div class="hero-side">
           <div
             class="hero-art"
-            aria-label="Pixel art raccoons racing a crocodile through neon Miami"
+            aria-label="Lenny and the Roboflow crew setting off on a pixel-art world tour"
           >
             <canvas id="attract-canvas" aria-hidden="true"></canvas
             ><img
               id="hero-image"
-              src="/assets/miami-hero-ai1.png"
-              alt="Pixel-art raccoon friends and a crocodile in Miami at sunset"
+              src="/assets/roboqueen-hero.svg"
+              alt="Lenny, AI1 cameras and the raccoon crew explore five colorful destinations"
               hidden
             />
             <div class="art-top">
-              <span class="pixel-label">SUNSET STRIP</span
-              ><span class="coordinate">25.7617° N, 80.1918° W</span>
+              <span class="pixel-label">THE RoboQueen WORLD TOUR</span
+              ><span class="coordinate">5 DESTINATIONS · 1 CREW</span>
             </div>
             <div class="gator-sticker">
-              <span>CAUTION</span><strong>GATOR HAS<br />RIGHT OF WAY</strong
-              ><span>★ MIAMI RULES ★</span>
+              <span>TRAVEL ADVISORY</span><strong>PACK YOUR<br />BAD IDEAS</strong
+              ><span>★ LENNY APPROVED ★</span>
             </div>
             <div class="art-bottom">
-              <span><i></i> LIVE FROM THE 305</span><span>INSERT FRIENDS →</span>
+              <span><i></i> POWERED BY ROBOFLOW</span><span>INSERT FRIENDS →</span>
             </div>
           </div>
           <section class="hero-rooms" id="rooms-section" aria-labelledby="open-rooms-title">
@@ -105,7 +106,7 @@
               <div class="empty-rooms">
                 <span aria-hidden="true">☀</span>
                 <div>
-                  <strong>Be the first on the beach.</strong>
+                  <strong>Start the next rumble.</strong>
                   <p>Create a room and invite your crew. Bots are optional.</p>
                 </div>
                 <button class="text-button" id="empty-create">CREATE ROOM ↗</button>
@@ -121,10 +122,32 @@
 
       <div class="ticker" aria-hidden="true">
         <div>
-          RACCOONS RUN THIS TOWN <b>✳</b> LESS TALK. MORE GATOR. <b>✳</b> POWERED BY PURE CHAOS
-          <b>✳</b> RACCOONS RUN THIS TOWN <b>✳</b> LESS TALK. MORE GATOR. <b>✳</b>
+          RACCOONS RUN THE WORLD <b>✳</b> MORE MAPS. MORE MAYHEM. <b>✳</b> POWERED BY PURE CHAOS
+          <b>✳</b> RACCOONS RUN THE WORLD <b>✳</b> MORE MAPS. MORE MAYHEM. <b>✳</b>
         </div>
       </div>
+
+      <section class="destinations-section" id="destinations" aria-labelledby="destinations-title">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">THE WORLD IS YOUR ARCADE</span>
+            <h2 id="destinations-title">Pick your next destination.</h2>
+            <p>Every map. Classic or XXL.</p>
+          </div>
+          <div class="destination-selection">
+            <span id="selected-map-note" role="status">Miami selected</span
+            ><button type="button" class="button primary" id="destination-create">
+              PLAY IN MIAMI <span>↗</span>
+            </button>
+          </div>
+        </div>
+        <div
+          id="home-map-picker"
+          class="map-picker home-map-picker"
+          role="group"
+          aria-label="Choose a destination"
+        ></div>
+      </section>
 
       <section class="play-section" id="play-modes">
         <div class="section-heading">
@@ -148,7 +171,7 @@
           </button>
           <button class="mode-card xxl" data-mode="xxl" aria-pressed="false">
             <div class="mode-card-top">
-              <span>02 / FLORIDA-SIZED</span><span class="selection-check">✓</span>
+              <span>02 / THE WHOLE CREW</span><span class="selection-check">✓</span>
             </div>
             <h3>
               XXL<span>60 <i>vs</i> 60</span>
@@ -199,13 +222,13 @@
         </article>
         <article>
           <span class="rule-icon">≈</span>
-          <h3>Gator, please.</h3>
-          <p>Hop on the crocodile. Ride it home.<br />He’s slow. He’s doing his best.</p>
-          <span>03 — GATOR GETAWAY</span>
+          <h3>Catch a ride.</h3>
+          <p>Hop on your map’s ride. Bring it home.<br />Slow ride. Big victory.</p>
+          <span>03 — RIDE GETAWAY</span>
         </article>
       </section>
       <footer>
-        <a class="footer-logo" href="/">LENNY’S MIAMI MAYHEM <span>✳</span></a
+        <a class="footer-logo" href="/">RoboQueen <span>✳</span></a
         ><span>A fan-made Roboflow arcade · Built for your browser</span
         ><button class="text-button" id="network-info">Play on your network ↗</button>
       </footer>
@@ -219,10 +242,10 @@
       ></canvas>
       <div class="game-topbar">
         <button class="game-brand" id="game-menu" title="Menu (Escape)">
-          ☰ <span>MIAMI MAYHEM</span>
+          ☰ <span>RoboQueen</span>
         </button>
         <div class="match-center">
-          <span id="match-mode">CLASSIC 5v5</span
+          <span id="match-destination">MIAMI</span><span id="match-mode">CLASSIC 5v5</span
           ><strong id="match-clock" title="Round elapsed time — victory comes from an objective"
             >0:00</strong
           ><button id="copy-room" title="Copy invitation link">
@@ -274,7 +297,7 @@
       <div class="gator-hud">
         <span>← PURPLE</span>
         <div><i id="gator-marker">◆</i></div>
-        <span>SUNSET →</span><small>GATOR GETAWAY</small>
+        <span>SUNSET →</span><small id="ride-route-label">GATOR GETAWAY</small>
       </div>
       <div class="game-bottom">
         <div class="player-card">
@@ -307,7 +330,7 @@
             type="button"
             id="touch-action"
             class="touch-button touch-action"
-            aria-label="Action. Use an AI1 station or ride the gator"
+            aria-label="Action. Use an AI1 station or pilot the getaway ride"
           >
             <span class="touch-button-icon" aria-hidden="true">▣</span
             ><strong id="touch-action-label">ACTION</strong>
@@ -360,9 +383,7 @@
         <div class="lobby-readiness" role="status" aria-live="polite" aria-atomic="true">
           <div class="lobby-status-copy">
             <strong id="lobby-status-title">Waiting for players</strong>
-            <p id="lobby-status-detail">
-              Join a team and choose your role. Only the room leader can start the match.
-            </p>
+            <p id="lobby-status-detail">Choose a team and a role.</p>
           </div>
           <button class="button primary" id="start-match" disabled>WAITING FOR PLAYERS</button>
         </div>
@@ -370,14 +391,21 @@
           <span id="lobby-leader">ROOM LEADER · Connecting…</span
           ><span id="lobby-population">PLAYERS · Connecting…</span>
         </div>
+        <div class="lobby-destination">
+          <img id="lobby-map-preview" src="/assets/maps/miami.svg" alt="" width="160" height="90" />
+          <div>
+            <span class="eyebrow">DESTINATION</span><strong id="lobby-map-name">Miami</strong
+            ><small id="lobby-map-description">Classic · Gator</small>
+          </div>
+          <button type="button" class="button secondary" id="lobby-change-map">CHANGE MAP ↗</button>
+        </div>
         <div class="lobby-section-heading">
           <h3>Pick your team</h3>
-          <span>Everyone in the room appears below.</span>
         </div>
         <div id="lobby-roster" class="lobby-roster" aria-label="Players in each team"></div>
         <div class="lobby-section-heading lobby-role-heading">
-          <h3>Choose your starting role</h3>
-          <span>You can change it before the round starts.</span>
+          <h3>Starting role</h3>
+          <button type="button" class="text-button lobby-help" data-help>How to play ↗</button>
         </div>
         <div class="role-options" aria-label="Your starting role">
           <button
@@ -387,7 +415,7 @@
             aria-pressed="false"
           >
             <span class="role-symbol">♛</span
-            ><span><b>QUEEN</b><small>Limited slots · Three lives each</small></span
+            ><span><b>QUEEN</b><small>3 lives · Limited seats</small></span
             ><em data-role-state="queen">TAKE THE CROWN</em>
           </button>
           <button
@@ -397,17 +425,12 @@
             aria-pressed="false"
           >
             <span class="role-symbol">▣</span
-            ><span><b>WORKER</b><small>Collect data · Ride the gator</small></span
+            ><span><b>WORKER</b><small>Collect data · Ride the getaway</small></span
             ><em data-role-state="worker">JOIN THE CREW</em>
           </button>
-          <div class="role-choice earned-role" aria-label="Warrior is earned during the round">
-            <span class="role-symbol">⚔</span
-            ><span><b>WARRIOR</b><small>Enter AI1 with one data chip</small></span
-            ><em>EARN IN THE ARENA</em>
-          </div>
         </div>
         <p id="lobby-role-note" class="role-selection-note" role="status">
-          Queen slots are chosen before the round. Workers earn upgrades in the arena.
+          Workers earn wings at AI1 stations.
         </p>
         <div class="lobby-bot-settings">
           <div id="lobby-bot-count-control" class="lobby-bot-count-control" hidden>
@@ -473,7 +496,7 @@
         <strong>Connection lost.</strong>
         <p id="disconnect-message">The room stopped responding.</p>
         <button class="button primary" id="reconnect">RECONNECT ↻</button
-        ><button class="button secondary" id="disconnect-home">BACK TO THE BEACH</button>
+        ><button class="button secondary" id="disconnect-home">BACK TO THE ARCADE</button>
       </div>
     </section>
 
@@ -483,74 +506,114 @@
           <span class="eyebrow">ROUND UP THE RACCOONS</span
           ><button class="close-dialog" type="button" aria-label="Close">×</button>
         </div>
-        <h2>Make some mayhem.</h2>
-        <label
-          >ROOM NAME<input
-            id="create-name"
-            maxlength="32"
-            value="Lenny’s after-hours party"
-            required
-        /></label>
-        <fieldset>
-          <legend>HOW BIG ARE WE GOING?</legend>
-          <label class="radio-card"
-            ><input type="radio" name="create-mode" value="normal" checked /><span
-              ><b>CLASSIC</b><small>5 vs 5 · Sunset Strip</small></span
-            ><strong>10</strong></label
-          ><label class="radio-card"
-            ><input type="radio" name="create-mode" value="xxl" /><span
-              ><b>XXL</b><small>Up to 60 vs 60 · Miami Sprawl</small></span
-            ><strong>120</strong></label
-          >
-        </fieldset>
-        <fieldset class="create-role-picker">
-          <legend>YOUR STARTING ROLE</legend>
-          <div>
-            <label class="radio-card"
-              ><input
-                type="radio"
-                name="create-role"
-                id="create-role-queen"
-                value="queen"
-                checked
-              /><span><b>♛ QUEEN</b><small>Limited slots · Three lives each</small></span></label
-            ><label class="radio-card"
-              ><input type="radio" name="create-role" id="create-role-worker" value="worker" /><span
-                ><b>▣ WORKER</b><small>Data, gator, or earn wings</small></span
+        <h2>Where are we rumbling?</h2>
+
+        <div class="create-layout">
+          <section class="create-map-panel" aria-labelledby="create-map-title">
+            <div class="picker-heading">
+              <h3 id="create-map-title">MAP</h3>
+              <span>All maps · Classic + XXL</span>
+            </div>
+            <div
+              id="create-map-picker"
+              class="map-picker create-map-picker"
+              role="group"
+              aria-label="Choose the room map"
+            ></div>
+            <p id="create-map-detail" class="create-map-detail"></p>
+          </section>
+          <div class="create-settings">
+            <label
+              >ROOM NAME<input
+                id="create-name"
+                maxlength="32"
+                value="Lenny’s after-hours party"
+                required
+            /></label>
+            <fieldset>
+              <legend>ARENA SIZE</legend>
+              <label class="radio-card"
+                ><input type="radio" name="create-mode" value="normal" checked /><span
+                  ><b>CLASSIC</b><small>5 vs 5</small></span
+                ><strong>10</strong></label
+              ><label class="radio-card"
+                ><input type="radio" name="create-mode" value="xxl" /><span
+                  ><b>XXL</b><small>Up to 60 vs 60 · Scrolling</small></span
+                ><strong>120</strong></label
+              >
+            </fieldset>
+            <fieldset class="create-role-picker">
+              <legend>STARTING ROLE</legend>
+              <div>
+                <label class="radio-card"
+                  ><input
+                    type="radio"
+                    name="create-role"
+                    id="create-role-queen"
+                    value="queen"
+                    checked
+                  /><span><b>♛ QUEEN</b><small>3 lives · Limited seats</small></span></label
+                ><label class="radio-card"
+                  ><input
+                    type="radio"
+                    name="create-role"
+                    id="create-role-worker"
+                    value="worker"
+                  /><span><b>▣ WORKER</b><small>Data · Rides · Upgrades</small></span></label
+                >
+              </div>
+            </fieldset>
+            <label class="check-row"
+              ><input type="checkbox" id="create-bots" checked /><span
+                ><b>Bring the bot crew</b
+                ><small>Practice instantly. Friends replace bots as they join.</small></span
+              ></label
+            >
+            <div class="bot-difficulty-picker">
+              <label for="create-bot-difficulty"
+                >BOT DIFFICULTY<select
+                  id="create-bot-difficulty"
+                  aria-describedby="create-difficulty-description"
+                >
+                  <option value="easy">Easy</option>
+                  <option value="normal" selected>Normal</option>
+                  <option value="hard">Hard</option>
+                </select></label
+              ><small id="create-difficulty-description">Balanced team play</small>
+            </div>
+            <label class="check-row"
+              ><input type="checkbox" id="create-private" /><span
+                ><b>Unlisted room</b><small>Invite link or code required.</small></span
               ></label
             >
           </div>
-          <p>You can change your starting role in the lobby. Warriors are earned during play.</p>
-        </fieldset>
-        <label class="check-row"
-          ><input type="checkbox" id="create-bots" checked /><span
-            ><b>Bring the bot crew</b
-            ><small>Practice instantly. Friends replace bots as they join.</small></span
-          ></label
-        >
-        <div class="bot-difficulty-picker">
-          <label for="create-bot-difficulty"
-            >BOT DIFFICULTY<select
-              id="create-bot-difficulty"
-              aria-describedby="create-difficulty-description"
-            >
-              <option value="easy">Easy</option>
-              <option value="normal" selected>Normal</option>
-              <option value="hard">Hard</option>
-            </select></label
-          ><small id="create-difficulty-description">Balanced team play</small>
         </div>
-        <label class="check-row"
-          ><input type="checkbox" id="create-private" /><span
-            ><b>Unlisted room</b><small>Only players with the code or link can join.</small></span
-          ></label
-        ><button class="button primary full" type="submit">OPEN THE ROOM <span>↗</span></button>
+        <div class="create-footer">
+          <p id="create-room-summary">Miami · Classic · Your crew awaits.</p>
+          <button class="button primary" type="submit">OPEN THE ROOM <span>↗</span></button>
+        </div>
       </form>
+    </dialog>
+
+    <dialog id="map-dialog" class="map-dialog" aria-labelledby="map-dialog-title">
+      <div class="dialog-top">
+        <span class="eyebrow">THE RoboQueen WORLD TOUR</span
+        ><button type="button" class="close-dialog" aria-label="Close map selection">×</button>
+      </div>
+      <h2 id="map-dialog-title">Choose the next destination.</h2>
+      <p id="map-dialog-note">The room leader can change the map before a round starts.</p>
+      <div
+        id="lobby-map-picker"
+        class="map-picker lobby-map-picker"
+        role="group"
+        aria-label="Room destinations"
+      ></div>
+      <button type="button" class="button secondary full close-dialog">BACK TO THE CREW ↗</button>
     </dialog>
 
     <dialog id="briefing-dialog" class="briefing-dialog" aria-labelledby="briefing-title">
       <div class="dialog-top">
-        <span class="eyebrow">YOUR 30-SECOND FLORIDA FIELD GUIDE</span
+        <span class="eyebrow">YOUR 30-SECOND FIELD GUIDE</span
         ><button class="close-dialog" id="briefing-close" aria-label="Cancel entering room">
           ×
         </button>
@@ -562,8 +625,8 @@
           <h3>DATA HEIST</h3>
           <p>
             Workers bring chips from supply piles to HQ.<b
-              >Your vault scales with humans + bots:
-              <span data-score-target-mode="normal">12</span> chips per team at 10 players,
+              >At least <span data-score-target-mode="normal">12</span> chips per team. The target
+              scales above 10 players, including bots:
               <span data-score-target-mode="xxl">144</span> at 120.</b
             >
           </p>
@@ -575,11 +638,11 @@
         </article>
         <article>
           <span aria-hidden="true">≈</span>
-          <h3>GATOR GETAWAY</h3>
+          <h3>RIDE GETAWAY</h3>
           <p>
             Workers <span class="keyboard-only">press E</span
-            ><span class="touch-only-inline">tap ACTION</span> beside the gator to ride.<b
-              >Reach your team’s goal to win.</b
+            ><span class="touch-only-inline">tap ACTION</span> beside your map’s ride to hop on.<b
+              >Reach the finish arch in your team’s color to win.</b
             >
           </p>
         </article>
@@ -598,8 +661,8 @@
       </div>
       <div class="briefing-keys keyboard-only">
         <span><kbd>A</kbd><kbd>D</kbd> Move</span><span><kbd>SPACE</kbd> Jump / hold to fly</span
-        ><span><kbd>E</kbd> Station / gator</span
-        ><span><kbd>S</kbd><kbd>SHIFT</kbd> Queen dive</span><span><kbd>S</kbd> Drop through</span
+        ><span><kbd>E</kbd> Station / ride</span><span><kbd>S</kbd><kbd>SHIFT</kbd> Queen dive</span
+        ><span><kbd>S</kbd> Drop through</span
         ><span><kbd>TAB</kbd> Crew names / scores · <kbd>ESC</kbd> Menu</span>
       </div>
       <div class="touch-guide touch-only" aria-label="Touch controls guide">
@@ -607,7 +670,7 @@
         <div>
           <span><b>RIGHT STICK</b> Move left / right. Pull down to dive or drop.</span
           ><span><b>JUMP · LEFT</b> Tap to jump. Hold to fly with wings or a crown.</span
-          ><span><b>ACTION · LEFT</b> Use AI1 stations or hop on the gator.</span
+          ><span><b>ACTION · LEFT</b> Use AI1 stations or hop on your map’s ride.</span
           ><span><b>CREW</b> See player names, data delivered, and knockouts.</span>
         </div>
       </div>
@@ -622,14 +685,14 @@
         <p id="briefing-destination">Your crew is waiting.</p>
       </div>
       <div class="briefing-actions">
-        <button class="text-button" id="briefing-cancel">BACK TO THE BEACH</button
+        <button class="text-button" id="briefing-cancel">BACK TO THE ARCADE</button
         ><button class="button primary" id="briefing-confirm">LET’S PLAY <span>↗</span></button>
       </div>
     </dialog>
 
     <dialog id="help-dialog" class="help-dialog">
       <div class="dialog-top">
-        <span class="eyebrow">A FIELD GUIDE TO FLORIDA</span
+        <span class="eyebrow">THE ROBOFLOW FIELD GUIDE</span
         ><button class="close-dialog" aria-label="Close">×</button>
       </div>
       <h2>Pick your crew.<br />Earn your wings.</h2>
@@ -653,14 +716,15 @@
           <h3>Worker</h3>
           <p>
             Collect one Roboflow chip at a time from the supply piles. Bring it to your HQ to fill
-            the vault. The target scales with everyone in the room, including bots:
-            <span data-score-target-mode="normal">12</span> chips per team at 10 players and
+            the vault. Every team needs at least
+            <span data-score-target-mode="normal">12</span> chips. Above 10 players, the target
+            scales with everyone in the room, including bots: 24 chips at 20 players and
             <span data-score-target-mode="xxl">144</span> at 120. Supply piles scale too. The target
             locks when the countdown starts. Or bring it inside a neutral or friendly AI1 station
             and <span class="keyboard-only">press E</span
             ><span class="touch-only-inline">tap ACTION</span>. Stay still while the installation
             completes: wings make you a warrior; lightning grants speed. Only workers collect data
-            and ride the gator.
+            and pilot the getaway ride.
           </p>
         </article>
         <article>
@@ -668,20 +732,20 @@
           <h3>Warrior</h3>
           <p>
             Earn wings during the round, never in the lobby. Fly and defeat opponents through
-            directional contact from above. You cannot carry data or ride the gator. When defeated,
-            you return as a worker and lose upgrades.
+            directional contact from above. You cannot carry data or pilot the getaway ride. When
+            defeated, you return as a worker and lose upgrades.
           </p>
         </article>
       </div>
       <div class="help-objectives">
         <b>THREE WAYS TO WIN</b><span>▣ ECONOMIC — fill your team’s vault.</span
         ><span>♛ MILITARY — eliminate every enemy queen; each has three lives.</span
-        ><span>≈ GATOR — ride the crocodile into your team’s goal.</span>
+        ><span>≈ RIDE — bring the map’s ride into your team’s finish arch.</span>
       </div>
       <div class="key-guide keyboard-only">
         <span><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> Move</span
         ><span><kbd>SPACE</kbd> / <kbd>W</kbd> Jump / hold to fly</span
-        ><span><kbd>E</kbd> / <kbd>J</kbd> Gate / gator interaction</span
+        ><span><kbd>E</kbd> / <kbd>J</kbd> Gate / ride interaction</span
         ><span><kbd>S</kbd> / <kbd>SHIFT</kbd> Queen dive</span
         ><span><kbd>S</kbd> / <kbd>↓</kbd> Drop through</span
         ><span><kbd>R</kbd> Roles and upgrade guide</span
@@ -694,7 +758,9 @@
           <span
             ><b>RIGHT STICK</b> Drag left or right to move. Drag down to dive or drop through.</span
           ><span><b>JUMP</b> Tap to jump. Hold to fly as a queen or warrior.</span
-          ><span><b>ACTION</b> Use an AI1 station while carrying a chip, or ride the gator.</span
+          ><span
+            ><b>ACTION</b> Use an AI1 station while carrying a chip, or pilot the getaway
+            ride.</span
           ><span
             ><b>DIVE / DROP</b> Dive as a queen, or drop through a platform. CREW shows names and
             scores.</span
@@ -729,7 +795,7 @@
           aria-pressed="false"
         >
           <span class="role-symbol">♛</span
-          ><span><b>QUEEN</b><small>Limited slots · Three lives each</small></span
+          ><span><b>QUEEN</b><small>3 lives · Limited seats</small></span
           ><em data-role-state="queen">TAKE THE CROWN</em></button
         ><button
           class="role-choice"
@@ -738,7 +804,7 @@
           aria-pressed="false"
         >
           <span class="role-symbol">▣</span
-          ><span><b>WORKER</b><small>Collect data · Ride the gator</small></span
+          ><span><b>WORKER</b><small>Collect data · Ride the getaway</small></span
           ><em data-role-state="worker">JOIN THE CREW</em>
         </button>
         <div class="role-choice earned-role">
@@ -764,9 +830,21 @@
       </div>
       <h2>Catch your breath.</h2>
       <p>The match keeps going while you’re here.</p>
+      <button type="button" class="menu-map-card" id="menu-map">
+        <img
+          id="menu-map-preview"
+          src="/assets/maps/miami.svg"
+          alt=""
+          width="160"
+          height="90"
+        /><span
+          ><small>YOUR DESTINATION</small><strong id="menu-map-name">Miami</strong
+          ><em id="menu-map-note">View the map lineup ↗</em></span
+        >
+      </button>
       <p id="network-detail" class="network-detail">Measuring round-trip latency…</p>
       <div class="menu-actions">
-        <button class="button primary close-dialog">BACK TO THE MAYHEM ↗</button
+        <button class="button primary close-dialog">BACK TO ROBOQUEEN ↗</button
         ><button class="button secondary" id="menu-invite">COPY INVITE LINK ⧉</button
         ><button class="button secondary" id="menu-roles">ROLES & UPGRADES ♛</button
         ><button class="button secondary" data-help>HOW TO PLAY ?</button
@@ -800,7 +878,7 @@
     <dialog id="results-dialog" aria-labelledby="winner-title" data-victory="military">
       <div class="victory-confetti" aria-hidden="true"></div>
       <div class="results-topline">
-        <span class="eyebrow">MIAMI HAS ITS WINNERS</span
+        <span class="eyebrow">THE CREW HAS ITS WINNERS</span
         ><button class="close-dialog" aria-label="Close results">×</button>
       </div>
       <div class="victory-banner">
@@ -813,14 +891,14 @@
       <p id="victory-actor" class="victory-actor"></p>
       <div id="victory-objectives" class="victory-objectives"></div>
       <div class="results-personal">
-        <span>YOUR NIGHT IN MIAMI</span>
+        <span id="results-location">YOUR ROUND</span>
         <div id="results-stats" class="results-stats"></div>
       </div>
       <div class="results-actions">
         <button class="button primary" id="rematch">NEXT ROUND LOBBY ↻</button
         ><button class="button secondary" id="results-roles">CHOOSE NEXT ROLE ♛</button>
       </div>
-      <button class="text-button" id="results-home">BACK TO THE BEACH →</button>
+      <button class="text-button" id="results-home">BACK TO THE ARCADE →</button>
     </dialog>
 
     <dialog id="network-dialog">

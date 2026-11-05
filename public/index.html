@@ -434,9 +434,7 @@
         </p>
         <div class="lobby-bot-settings">
           <div id="lobby-bot-count-control" class="lobby-bot-count-control" hidden>
-            <label for="lobby-bots"
-              >BOT CREW <small id="lobby-current-bot-count">9 bots in this room</small></label
-            >
+            <label for="lobby-bots">BOT CREW</label>
             <div class="lobby-bot-count-actions">
               <input
                 id="lobby-bots"
@@ -452,21 +450,24 @@
                 UPDATE BOTS
               </button>
             </div>
+            <small id="lobby-current-bot-count">9 bots in this room</small>
           </div>
-          <label id="lobby-difficulty-control" for="lobby-bot-difficulty"
-            >BOT DIFFICULTY<select
-              id="lobby-bot-difficulty"
-              data-room-difficulty
-              aria-describedby="lobby-difficulty-description"
+          <div class="lobby-difficulty-settings">
+            <label id="lobby-difficulty-control" for="lobby-bot-difficulty"
+              >BOT DIFFICULTY<select
+                id="lobby-bot-difficulty"
+                data-room-difficulty
+                aria-describedby="lobby-difficulty-description"
+              >
+                <option value="easy">Easy</option>
+                <option value="normal" selected>Normal</option>
+                <option value="hard">Hard</option>
+              </select></label
             >
-              <option value="easy">Easy</option>
-              <option value="normal" selected>Normal</option>
-              <option value="hard">Hard</option>
-            </select></label
-          >
-          <div>
-            <strong id="lobby-difficulty-title">NORMAL BOTS</strong
-            ><small id="lobby-difficulty-description">Balanced team play</small>
+            <div>
+              <strong id="lobby-difficulty-title">NORMAL BOTS</strong
+              ><small id="lobby-difficulty-description">Balanced team play</small>
+            </div>
           </div>
         </div>
         <p id="lobby-rules" class="lobby-rules">
@@ -613,50 +614,49 @@
 
     <dialog id="briefing-dialog" class="briefing-dialog" aria-labelledby="briefing-title">
       <div class="dialog-top">
-        <span class="eyebrow">YOUR 30-SECOND FIELD GUIDE</span
+        <span class="eyebrow">BEFORE YOU PLAY</span
         ><button class="close-dialog" id="briefing-close" aria-label="Cancel entering room">
           ×
         </button>
       </div>
-      <h2 id="briefing-title" tabindex="-1">Three ways to win.<br />One very chaotic crew.</h2>
+      <h2 id="briefing-title" tabindex="-1">Three ways to win.</h2>
       <div class="briefing-objectives">
         <article>
           <span aria-hidden="true">▣</span>
-          <h3>DATA HEIST</h3>
+          <h3>DATA</h3>
           <p>
-            Workers bring chips from supply piles to HQ.<b
-              >At least <span data-score-target-mode="normal">12</span> chips per team. The target
-              scales above 10 players, including bots:
-              <span data-score-target-mode="xxl">144</span> at 120.</b
+            Workers carry chips from supply piles to HQ. Fill your vault to win.<b
+              ><span data-score-target-mode="normal">12</span>+ chips per team. More players, bigger
+              target.</b
             >
           </p>
         </article>
         <article>
           <span aria-hidden="true">♛</span>
           <h3>MILITARY</h3>
-          <p>Protect your queens. Eliminate every enemy queen.<b>Each queen has three lives.</b></p>
+          <p>Eliminate every enemy Queen. Protect yours.<b>3 lives per Queen.</b></p>
         </article>
         <article>
           <span aria-hidden="true">≈</span>
           <h3>RIDE GETAWAY</h3>
           <p>
             Workers <span class="keyboard-only">press E</span
-            ><span class="touch-only-inline">tap ACTION</span> beside your map’s ride to hop on.<b
-              >Reach the finish arch in your team’s color to win.</b
+            ><span class="touch-only-inline">tap ACTION</span> beside the ride to board.<b
+              >Reach your team’s finish arch.</b
             >
           </p>
         </article>
       </div>
       <div class="briefing-roles">
         <p>
-          <strong>♛ QUEEN</strong> Fly, fight from above, claim stations. Pick before the round: one
-          queen per five teammates.
+          <strong>♛ QUEEN</strong> Fly, fight from above, claim stations. Choose before the round: 1
+          Queen per 5 teammates.
         </p>
         <p>
-          <strong>▣ WORKER → ⚔ WARRIOR</strong> Carry one chip inside a neutral or friendly AI1
-          station and <span class="keyboard-only">press E</span
-          ><span class="touch-only-inline">tap ACTION</span>. Wings grant flight; lightning grants
-          speed. Stay still during installation. Defeat removes upgrades.
+          <strong>▣ WORKER → ⚔ WARRIOR</strong> Bring 1 chip into a neutral or friendly AI1 station
+          and <span class="keyboard-only">press E</span
+          ><span class="touch-only-inline">tap ACTION</span>. Stay still to install: wings give
+          flight, lightning gives speed. Defeat removes upgrades.
         </p>
       </div>
       <div class="briefing-keys keyboard-only">
@@ -695,45 +695,37 @@
         <span class="eyebrow">THE ROBOFLOW FIELD GUIDE</span
         ><button class="close-dialog" aria-label="Close">×</button>
       </div>
-      <h2>Pick your crew.<br />Earn your wings.</h2>
+      <h2>Know your role.</h2>
       <div class="help-grid">
         <article>
           <span>♛</span>
           <h3>Queen</h3>
           <p>
-            One queen per five teammates, chosen before the round; a full Classic team has one and a
-            full XXL team has twelve. Hold <span class="keyboard-only">jump</span
-            ><span class="touch-only-inline">JUMP</span> to fly with AI1;
-            <span class="keyboard-only">press S or Shift</span
-            ><span class="touch-only-inline">tap DIVE or pull the joystick down</span> in the air to
-            dive. Touch a gate to claim it for your team. Defeat opponents with directional contact
-            from above. Lose all three lives and your queen is eliminated. Your team loses when
-            every queen is out.
+            Choose before the round: 1 Queen per 5 teammates. Hold
+            <span class="keyboard-only">jump</span><span class="touch-only-inline">JUMP</span> to
+            fly. <span class="keyboard-only">S or Shift</span
+            ><span class="touch-only-inline">DIVE or stick down</span> dives in the air. Touch
+            stations to claim them. Strike from above to defeat opponents. Each Queen has 3 lives;
+            lose every Queen and your team loses.
           </p>
         </article>
         <article>
           <span>▣</span>
           <h3>Worker</h3>
           <p>
-            Collect one Roboflow chip at a time from the supply piles. Bring it to your HQ to fill
-            the vault. Every team needs at least
-            <span data-score-target-mode="normal">12</span> chips. Above 10 players, the target
-            scales with everyone in the room, including bots: 24 chips at 20 players and
-            <span data-score-target-mode="xxl">144</span> at 120. Supply piles scale too. The target
-            locks when the countdown starts. Or bring it inside a neutral or friendly AI1 station
-            and <span class="keyboard-only">press E</span
-            ><span class="touch-only-inline">tap ACTION</span>. Stay still while the installation
-            completes: wings make you a warrior; lightning grants speed. Only workers collect data
-            and pilot the getaway ride.
+            Carry 1 chip at a time from supply piles to HQ. Only Workers collect chips and pilot
+            rides. For upgrades, bring a chip into a neutral or friendly AI1 station and
+            <span class="keyboard-only">press E</span
+            ><span class="touch-only-inline">tap ACTION</span>. Stay still to install: wings make a
+            Warrior; lightning adds speed.
           </p>
         </article>
         <article>
           <span>⚔</span>
           <h3>Warrior</h3>
           <p>
-            Earn wings during the round, never in the lobby. Fly and defeat opponents through
-            directional contact from above. You cannot carry data or pilot the getaway ride. When
-            defeated, you return as a worker and lose upgrades.
+            Earn wings at AI1 during play. Fly and strike from above. Warriors cannot carry chips or
+            pilot rides. Defeat returns you to Worker and removes upgrades.
           </p>
         </article>
       </div>
@@ -768,15 +760,10 @@
         </div>
       </div>
       <p class="help-footnote">
-        Queen seats stay locked during a round. Workers become warriors through gates; warriors
-        become workers after defeat. There is no score-based time limit. Classic uses one queen plus
-        four workers per full team. XXL scales the arena, crew, queen slots, and data target; every
-        queen still has three lives.
-        <span class="keyboard-only">Keyboard controls are adapted for laptops.</span
-        ><span class="touch-only-inline"
-          >Play in portrait or landscape. Small screens follow your raccoon; larger screens show
-          more of the arena. Use the menu to switch touch controls on or off.</span
-        >
+        Vaults need at least <span data-score-target-mode="normal">12</span> chips per team. Above
+        10 players, humans and bots raise the target: 24 at 20,
+        <span data-score-target-mode="xxl">144</span> at 120. Supply scales too. The goal and Queen
+        roles lock at countdown. Win by an objective; there is no time limit.
       </p>
       <button class="button primary full close-dialog">I WAS BORN FOR THIS ↗</button>
     </dialog>

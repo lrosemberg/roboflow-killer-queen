@@ -373,15 +373,15 @@ function joinAction(action) {
   pendingBriefingAction = { ...action };
   closeDialogs();
   $('#briefing-name').value = action.name || playerName();
-  const mode = action.mode === 'xxl' ? 'XXL · up to 120 players' : 'Classic · 5 vs 5';
+  const mode = action.mode === 'xxl' ? 'XXL 60v60' : 'Classic 5v5';
   const listed = action.type === 'join' ? publicRooms.find((r) => r.code === action.code) : null;
   const destination = getMapDefinition(action.mapId || listed?.mapId || selectedMapId);
   $('#briefing-destination').textContent =
     action.type === 'create'
-      ? `${destination.name} · ${action.roomName} · ${mode} · ${action.botCount} ${difficultyName(action.botDifficulty)} bots · ${action.role === 'worker' ? 'Worker' : 'Queen'}`
+      ? `${destination.name} · ${mode}\n${action.roomName} · ${action.botCount} ${difficultyName(action.botDifficulty)} bots · ${action.role === 'worker' ? 'Worker' : 'Queen'}`
       : action.type === 'join'
-        ? `Joining room ${action.code}${listed ? ` · ${destination.name} · ${difficultyName(listed.botDifficulty)} bots` : ' · Map and bots chosen by the room leader'} · Be ready if the round is already live.`
-        : `Quick play · ${destination.name} · ${mode} · New rooms use ${difficultyName(action.botDifficulty)} bots.`;
+        ? `Room ${action.code}${listed ? ` · ${destination.name} · ${difficultyName(listed.botDifficulty)} bots` : ''}`
+        : `Quick play · ${destination.name} · ${mode}\n${difficultyName(action.botDifficulty)} bots`;
   showDialog('#briefing-dialog');
   $('#briefing-title').focus({ preventScroll: true });
 }
@@ -681,8 +681,7 @@ function updateHUD(player) {
   $('#apply-bots').disabled = state.status === 'playing';
   $('#menu-bots').disabled = state.status === 'playing';
   $('#lobby-bot-count-control').hidden = room.hostId !== localId;
-  $('#lobby-current-bot-count').textContent =
-    `${state.botCount} bots in the room · friends take priority`;
+  $('#lobby-current-bot-count').textContent = `${state.botCount} bots in the room`;
   for (const id of ['#lobby-bots', '#menu-bots']) {
     const field = $(id);
     field.max = room.maxPlayers - 1;
@@ -701,6 +700,7 @@ function updateHUD(player) {
     select.disabled = !host || state.status === 'playing';
   }
   $('#lobby-difficulty-control').hidden = !host;
+  $('#lobby-difficulty-title').hidden = host;
   $('#lobby-difficulty-title').textContent = `${difficultyName(difficulty).toUpperCase()} BOTS`;
   $('#lobby-difficulty-description').textContent = DIFFICULTY_COPY[difficulty];
   $('#menu-difficulty-description').textContent =

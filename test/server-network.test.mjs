@@ -219,6 +219,10 @@ test('slow snapshot recipient recovers ordered events, acknowledges them, and ke
   const eventId = room.eventCounter;
   await pause(310);
   assert.ok(game.metrics().skippedSnapshots > 0);
+  assert.ok(
+    game.clients.get(host.id).eventSent < eventId,
+    'skipped states do not advance the delivered-event cursor',
+  );
   socket.send = original;
   release();
   const recovered = await host.wait('state', (s) => s.events.some((e) => e.id === eventId));
@@ -239,6 +243,51 @@ test('slow snapshot recipient recovers ordered events, acknowledges them, and ke
   host.send({ type: 'input', seq: 1, reset: true, eventAck: eventId, eventEpoch: 'WRONG' });
   await until(() => room.players.get(host.id).ack === 1);
   assert.equal(game.clients.get(host.id).eventAck, eventId);
+});
+
+test('live TCP sends events once while ACK is delayed; reconnect replays only unacknowledged events', async (t) => {
+  const { game, port, host, room } = await setup(t);
+  const peer = await join(port, room.code);
+  const initial = await host.wait('state', (s) => s.eventLatest >= room.eventCounter);
+  host.send({ type: 'event-ack', id: initial.eventLatest, eventEpoch: room.code });
+  await until(() => game.clients.get(host.id).eventAck === initial.eventLatest);
+  const acknowledged = initial.eventLatest;
+  peer.send({ type: 'role', role: 'worker' });
+  const delivered = await host.wait('state', (s) => s.events.some((e) => e.id > acknowledged));
+  const unacknowledgedIds = delivered.events.map((e) => e.id);
+  const latest = delivered.eventLatest;
+  assert.equal(game.clients.get(host.id).eventAck, acknowledged);
+  assert.equal(game.clients.get(host.id).eventSent, latest);
+  for (let i = 0; i < 3; i++) {
+    const next = await host.wait(
+      'state',
+      (s) => s.time > delivered.time && s.eventLatest === latest,
+    );
+    assert.deepEqual(
+      next.events,
+      [],
+      'delayed application ACK must not repeat events on live ordered TCP',
+    );
+  }
+  host.ws.terminate();
+  await until(() => !game.clients.has(host.id));
+  const { next, joined } = await resume(port, host, room.code, acknowledged);
+  assert.equal(joined.eventAck, acknowledged);
+  const replay = await next.wait('state');
+  assert.deepEqual(
+    replay.events.map((e) => e.id),
+    unacknowledgedIds,
+  );
+  next.send({ type: 'event-ack', id: latest, eventEpoch: room.code });
+  await until(() => game.clients.get(host.id).eventAck === latest);
+  next.ws.terminate();
+  await until(() => !game.clients.has(host.id));
+  const second = await resume(port, next, room.code, latest);
+  assert.deepEqual(
+    (await second.next.wait('state')).events,
+    [],
+    'processed events stay acknowledged after another reconnect',
+  );
 });
 
 test('event ring remains bounded and reports its floor across reconnect and round resets', async (t) => {

@@ -81,6 +81,42 @@ const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const section = (from, to) =>
   app.slice(app.indexOf(`function ${from}`), app.indexOf(`function ${to}`));
 
+test('the app disables command-age tracking for every inactive gameplay lifecycle', () => {
+  let dialog = false,
+    countdown = false;
+  const context = vm.createContext({
+    room: { code: 'ABC123' },
+    socketReady: true,
+    joiningRoom: false,
+    joinFailed: false,
+    state: { status: 'playing' },
+    predicted: { alive: true },
+    document: { hidden: false, querySelector: () => dialog },
+    countdownLocked: () => countdown,
+  });
+  vm.runInContext(section('inputIsActive(', 'sendInput'), context);
+  assert.equal(context.inputIsActive(), true);
+  for (const status of ['waiting', 'ended'])
+    assert.equal(context.inputIsActive({ status }, { alive: true }), false);
+  assert.equal(context.inputIsActive({ status: 'playing' }, { alive: false }), false);
+  countdown = true;
+  assert.equal(context.inputIsActive(), false);
+  countdown = false;
+  dialog = true;
+  assert.equal(context.inputIsActive(), false);
+  dialog = false;
+  context.document.hidden = true;
+  assert.equal(context.inputIsActive(), false);
+  context.document.hidden = false;
+  for (const field of ['joiningRoom', 'joinFailed']) {
+    context[field] = true;
+    assert.equal(context.inputIsActive(), false);
+    context[field] = false;
+  }
+  context.socketReady = false;
+  assert.equal(context.inputIsActive(), false);
+});
+
 // Execute the app's real connection handlers against a controllable WebSocket
 // and clock. No network/server is started, and no source-pattern assertion can
 // substitute for a transition actually sending the expected wire message.
@@ -162,6 +198,7 @@ function connectionFixture({ reload = false, saved = true } = {}) {
     },
     setConnection: (online) => (context.socketReady = online),
     networkInput: { reset() {} },
+    inputAckWatchdog: { reset() {} },
     prediction: { reset() {} },
     resetInput() {
       resets++;
@@ -391,6 +428,8 @@ test('fresh authoritative snapshots clear the stale overlay and deduplicate ever
     $$: () => [],
     validDifficulty: () => 'normal',
     countdownLocked: () => false,
+    inputIsActive: () => true,
+    inputAckWatchdog: { acknowledge: () => false },
     prediction: { reconcile: (player) => ({ ...player }) },
     gameRenderer: { setState: (snapshot) => rendered.push(snapshot.events.map((e) => e.id)) },
     playSound: (type) => heard.push(type),

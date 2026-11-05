@@ -12,7 +12,7 @@ import { queuePlayerInput, consumePlayerInput, resetPlayerInput } from '/shared/
 import { ScreenAwake, fullscreenElement, toggleGameFullscreen } from './screen-session.js';
 import { DEFAULT_MAP_ID, isMapId, getMapDefinition } from '/shared/maps.js';
 import { createMapPicker } from './map-picker.js';
-import { NetworkInput } from './network-input.js';
+import { NetworkInput, InputAckWatchdog } from './network-input.js';
 import { RoomSession, EventCursor } from './network-session.js';
 
 bindPageGestureGuard();
@@ -66,6 +66,9 @@ try {
 } catch {}
 const roomSession = new RoomSession(tabStorage);
 const eventCursor = new EventCursor();
+const inputAckWatchdog = new InputAckWatchdog({
+  onStall: () => recoverConnection('Inputs are delayed. Restoring your connection…'),
+});
 const networkInput = new NetworkInput({
   isOpen: () => socketReady && !joiningRoom && !joinFailed && socket?.readyState === WebSocket.OPEN,
   bufferedAmount: () => socket?.bufferedAmount || 0,
@@ -74,6 +77,7 @@ const networkInput = new NetworkInput({
     if (!send(packet)) return false;
     seq = packet.seq;
     prediction.record({ seq, input: packet, time: performance.now() });
+    inputAckWatchdog.record(seq, { active: inputIsActive(), reset: fields.reset === true });
     markEventsAcknowledged();
     return true;
   },
@@ -327,13 +331,23 @@ function roundStartsAt(data = state) {
 function countdownLocked(data = state) {
   return Boolean(data?.status === 'playing' && roundStartsAt(data) > data.time);
 }
+function inputIsActive(data = state, player = predicted) {
+  return Boolean(
+    room &&
+    socketReady &&
+    !joiningRoom &&
+    !joinFailed &&
+    data?.status === 'playing' &&
+    !countdownLocked(data) &&
+    player?.alive &&
+    !document.hidden &&
+    !document.querySelector('dialog[open]'),
+  );
+}
 function sendInput({ reset = false } = {}) {
   if (!room || !socketReady || joiningRoom || joinFailed) return;
-  const active =
-    state?.status === 'playing' &&
-    !countdownLocked() &&
-    !document.hidden &&
-    !document.querySelector('dialog[open]');
+  const active = inputIsActive();
+  if (!active || reset) inputAckWatchdog.reset();
   if (reset) networkInput.update(blankInput(), { reset: true, active: false });
   else if (active) networkInput.update(input);
   else networkInput.tick(false);
@@ -378,6 +392,7 @@ function recoverConnection(message = 'Reconnecting to your room…', delay = 0) 
   joiningRoom = Boolean(room);
   joinFailed = false;
   networkInput.reset();
+  inputAckWatchdog.reset();
   resetInput();
   prediction.reset();
   roomSession.progress(seq, eventCursor.id, true);
@@ -448,6 +463,7 @@ function updateCountdown() {
   }
 }
 function resetInput() {
+  inputAckWatchdog.reset();
   heldKeys.clear();
   touchInput.reset();
   touchControls?.reset({ notify: false });
@@ -582,6 +598,7 @@ function connect() {
     setConnection(false);
     joiningRoom = Boolean(room);
     networkInput.reset();
+    inputAckWatchdog.reset();
     resetInput();
     if (event.code === 4000) {
       // A duplicated tab can inherit sessionStorage. The displaced tab must
@@ -718,6 +735,7 @@ function enterGame(data) {
   joinFailed = false;
   resumeRequested = false;
   networkInput.reset();
+  inputAckWatchdog.reset();
   closeDialogs();
   room = { ...data.room, code: data.code, hostId: data.hostId };
   map = data.map;
@@ -778,6 +796,13 @@ function enterGame(data) {
 function receiveState(snapshot) {
   if (!room || !map) return;
   const data = eventCursor.filter(snapshot);
+  const authoritative = data.players.find((p) => p.id === localId);
+  if (
+    inputAckWatchdog.acknowledge(data.ack ?? authoritative?.ack, {
+      active: inputIsActive(data, authoritative),
+    })
+  )
+    return;
   // The target follows the lobby roster, then stays fixed for the whole round.
   // Renderer and victory panels share this map, so update it before either reads it.
   if (
@@ -792,7 +817,6 @@ function receiveState(snapshot) {
     if (Number.isFinite(data[field])) map[field] = data[field];
   lastSnapshot = performance.now();
   serverOffset = data.time - Date.now() + ping / 2;
-  const authoritative = data.players.find((p) => p.id === localId);
   if (authoritative) {
     $('#connection-overlay').hidden = true;
     const before = predicted

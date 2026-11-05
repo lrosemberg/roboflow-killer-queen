@@ -839,6 +839,8 @@ export function createGameServer({
       closeTransport(oldSocket, 4000, 'Session resumed elsewhere');
     stopDisconnectedPlayer(room, room.players.get(previous.id));
     acknowledgeEvents(previous, msg.eventAck, msg.eventEpoch);
+    // A new transport must replay retained events not yet processed by the client.
+    previous.eventSent = previous.eventAck;
     sendJoined(room, previous, true);
     sendSnapshot(room, previous);
     return previous;
@@ -1034,7 +1036,9 @@ export function createGameServer({
     // Crowded clients often have the exact same view and input ack. Reuse the
     // immutable UTF-8 packet for that snapshot only; each socket still owns its
     // deflate dictionary and backpressure. No interest-window rounding/deltas.
-    const eventKey = c.eventReplay ? c.eventAck : 'legacy';
+    // Ordered TCP already delivers each admitted snapshot. ACK lag must not
+    // duplicate the same feed in every live state; ACK is the resume boundary.
+    const eventKey = c.eventReplay ? c.eventSent : 'legacy';
     const key = `${Number(c.compact)}/${eventKey}/${local.ack}/${visible.map((p) => p.id).join(',')}/${berries.map((b) => b.id).join(',')}`;
     let data = snapshot.packets.get(key);
     if (!data) {
@@ -1043,7 +1047,7 @@ export function createGameServer({
             eventEpoch: r.code,
             eventLatest: r.eventCounter,
             eventFloor: r.eventHistory[0]?.id ?? r.eventCounter + 1,
-            events: r.eventHistory.filter((e) => e.id > c.eventAck),
+            events: r.eventHistory.filter((e) => e.id > c.eventSent),
           }
         : { events: snapshot.events };
       const eventJson = JSON.stringify(replay).slice(1, -1);

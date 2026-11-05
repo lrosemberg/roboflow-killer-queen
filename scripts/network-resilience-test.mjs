@@ -115,6 +115,8 @@ async function connect(index, resumeToken = null, eventAck = 0) {
     seq: 0,
     states: 0,
     events: new Map(),
+    eventDeliveries: new Map(),
+    deferEventProcessing: false,
     latest: new Map(),
     pending: new Set(),
     failures: [],
@@ -164,14 +166,19 @@ async function connect(index, resumeToken = null, eventAck = 0) {
         peer.own = message.players.find((p) => p.id === peer.id);
         peer.seq = Math.max(peer.seq, message.ack || 0);
         peer.eventEpoch = message.eventEpoch || peer.eventEpoch;
-        for (const event of message.events || []) peer.events.set(event.id, event);
-        const latestEvent = Math.max(
-          peer.eventAck,
-          ...(message.events || []).map((event) => event.id),
-        );
-        if (latestEvent > peer.eventAck) {
-          peer.eventAck = latestEvent;
-          send(peer, { type: 'event-ack', id: latestEvent, eventEpoch: peer.eventEpoch });
+        for (const event of message.events || [])
+          peer.eventDeliveries.set(event.id, (peer.eventDeliveries.get(event.id) || 0) + 1);
+        if (!peer.deferEventProcessing) {
+          for (const event of message.events || []) peer.events.set(event.id, event);
+          const latestEvent = Math.max(
+            peer.eventAck,
+            (message.eventFloor || 1) - 1,
+            ...(message.events || []).map((event) => event.id),
+          );
+          if (latestEvent > peer.eventAck) {
+            peer.eventAck = latestEvent;
+            send(peer, { type: 'event-ack', id: latestEvent, eventEpoch: peer.eventEpoch });
+          }
         }
       }
       if (message.type === 'pong') pingSamples.push(performance.now() - message.time);
@@ -337,6 +344,48 @@ try {
       skippedSnapshots: game.metrics().skippedSnapshots - skips,
       heldSnapshotFrames: 1,
       acknowledgedEventsStopReplaying: true,
+    };
+  });
+  await phase('Live events send once; unprocessed events recover on resume', async () => {
+    const deferred = participants[118],
+      roleActor = participants.find((peer) => room.players.get(peer.id).role === 'queen');
+    await until(
+      () => game.clients.get(deferred.id).eventAck === room.eventCounter,
+      'deferred recipient starts from a processed cursor',
+    );
+    const acknowledged = deferred.eventAck;
+    deferred.deferEventProcessing = true;
+    send(roleActor, { type: 'role', role: 'worker' });
+    await until(() => room.eventCounter > acknowledged, 'ordinary role event generated');
+    const eventId = room.eventCounter;
+    await until(() => deferred.eventDeliveries.has(eventId), 'event reaches deferred recipient');
+    const deliveredAtState = deferred.states;
+    await until(
+      () => deferred.states >= deliveredAtState + 3,
+      'three subsequent live snapshots arrive',
+    );
+    assert.equal(deferred.eventDeliveries.get(eventId), 1);
+    assert.equal(deferred.events.has(eventId), false);
+    assert.equal(game.clients.get(deferred.id).eventAck, acknowledged);
+    deferred.expectedClose = true;
+    deferred.ws.terminate();
+    await until(() => !game.clients.has(deferred.id), 'deferred transport disconnects');
+    const fresh = await connect(deferred.index, deferred.resumeToken, acknowledged);
+    assert.equal(fresh.id, deferred.id);
+    await until(() => fresh.events.has(eventId), 'resume replays the unprocessed role event');
+    await until(
+      () => game.clients.get(fresh.id).eventAck >= eventId,
+      'recovered event becomes acknowledged',
+    );
+    assert.equal(fresh.eventDeliveries.get(eventId), 1);
+    participants[118] = fresh;
+    send(roleActor, { type: 'role', role: 'queen' });
+    await until(() => room.players.get(roleActor.id).role === 'queen', 'restore chosen Queen');
+    return {
+      liveDeliveriesWhileUnacknowledged: 1,
+      subsequentSnapshotsChecked: 3,
+      replayedUnprocessedEvents: 1,
+      resumedSameIdentity: true,
     };
   });
   await phase('Congested map control closes transport; resume restores full geometry', async () => {

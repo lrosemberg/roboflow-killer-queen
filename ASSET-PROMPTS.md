@@ -21,16 +21,16 @@ File: `public/assets/lenny-sprites.png` (1254 × 1254, RGBA with transparency)
 
 The eight generated sprites were visually inspected. The generator changed the requested resolution and did not keep exact equal cell padding. Use the following source rectangles to crop at render time; the original file has not been edited.
 
-| Sprite | x | y | width | height |
-| --- | ---: | ---: | ---: | ---: |
-| Aqua idle | 24 | 202 | 256 | 316 |
-| Aqua running | 324 | 202 | 275 | 307 |
-| Aqua captain | 628 | 172 | 281 | 345 |
-| Aqua warrior | 970 | 202 | 260 | 315 |
-| Coral idle | 24 | 798 | 257 | 316 |
-| Coral running | 315 | 797 | 277 | 307 |
-| Coral captain | 613 | 764 | 280 | 350 |
-| Crocodile | 903 | 887 | 350 | 180 |
+| Sprite        |   x |   y | width | height |
+| ------------- | --: | --: | ----: | -----: |
+| Aqua idle     |  24 | 202 |   256 |    316 |
+| Aqua running  | 324 | 202 |   275 |    307 |
+| Aqua captain  | 628 | 172 |   281 |    345 |
+| Aqua warrior  | 970 | 202 |   260 |    315 |
+| Coral idle    |  24 | 798 |   257 |    316 |
+| Coral running | 315 | 797 |   277 |    307 |
+| Coral captain | 613 | 764 |   280 |    350 |
+| Crocodile     | 903 | 887 |   350 |    180 |
 
 Prompt:
 
@@ -65,5 +65,3 @@ Built-in `image_gen` edits; original assets retained. All edited outputs visuall
 > Image2 is PRODUCT REFERENCE ONLY: the Roboflow AI1 industrial camera.
 > Make ONE targeted edit in Image1: replace the generic cyan rocket backpack worn by the flying sunglasses raccoon in the UPPER RIGHT with a recognizable PIXEL-ART ROBOfLOW AI1 CAMERA backpack based on Image2. The new backpack has a chunky black rectangular industrial body; square front lens panel with a big round black lens surrounded by eight small white LEDs; purple vertical side stripe marked tiny AI1 if readable; lower black cooling fins. Face the camera lens slightly toward the viewer so the product identity is recognizable. Mount camera on the raccoon's back, approximately the old rocket's size or only slightly larger for readability. Keep the orange jet flame below as whimsical game propulsion.
 > Preserve all other Image1 content exactly:1536x1024canvas, full composition and framing, raccoon pose and size, sunglasses, coral shirt with white R, gray fur, every other raccoon and purple/coral shirt, crocodile, crown, ocean, palms, sunset, art deco buildings and all pixel-art details. The ONLY changed region is the flying raccoon's backpack and its immediate flame connection. No new text except tiny AI1 on the backpack. Keep crisp16-bit pixel art, no photographic patch, no giant camera elsewhere.
-
-

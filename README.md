@@ -56,15 +56,15 @@ See [pacing changes and measured match samples](docs/BALANCE.md).
 
 ## Controls
 
-| Action | Keyboard |
-| --- | --- |
-| Move | A / D or left / right arrows |
-| Jump; hold to fly as Queen/Warrior | Space / W / up arrow |
-| AI1 station or crocodile | E / J |
-| Queen dive / drop through platform | S / down; Shift also dives |
-| Role guide | R |
-| Crew names and scores | Hold Tab |
-| Menu | Escape |
+| Action                             | Keyboard                     |
+| ---------------------------------- | ---------------------------- |
+| Move                               | A / D or left / right arrows |
+| Jump; hold to fly as Queen/Warrior | Space / W / up arrow         |
+| AI1 station or crocodile           | E / J                        |
+| Queen dive / drop through platform | S / down; Shift also dives   |
+| Role guide                         | R                            |
+| Crew names and scores              | Hold Tab                     |
+| Menu                               | Escape                       |
 
 Mobile supports portrait and landscape, with a right movement stick and left Jump/Action buttons. Fullscreen and screen wake lock are optional browser capabilities. Touch controls can be set to Auto, Always on, or Off. The game uses a following camera on small Classic viewports so characters stay readable.
 

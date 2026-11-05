@@ -1,0 +1,9 @@
+node_modules/
+public/assets/
+screenshots/
+session-info.json
+scripts/*.json
+scripts/*.txt
+work/
+coverage/
+package-lock.json

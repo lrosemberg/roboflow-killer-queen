@@ -2,22 +2,49 @@
 // protocol version; clients import the schema rather than receiving it per frame.
 export const COMPACT_PROTOCOL = 'compact-v1';
 export const PLAYER_FIELDS = Object.freeze([
-  'id', 'name', 'team', 'role', 'x', 'y', 'vx', 'vy', 'facing',
-  'grounded', 'alive', 'respawnAt', 'carrying',
-  'upgradeUntil', 'upgradeGateId', 'upgradeKind',
-  'queenLives', 'eliminated', 'speedBoost', 'dive', 'bot',
-  'invulnerableUntil', 'attackUntil', 'emote', 'emoteUntil',
-  'score', 'kills', 'ack', 'jumps', 'jumpHeld', 'dashHeld',
-  'nextFlap', 'nextDash', 'dashUntil',
+  'id',
+  'name',
+  'team',
+  'role',
+  'x',
+  'y',
+  'vx',
+  'vy',
+  'facing',
+  'grounded',
+  'alive',
+  'respawnAt',
+  'carrying',
+  'upgradeUntil',
+  'upgradeGateId',
+  'upgradeKind',
+  'queenLives',
+  'eliminated',
+  'speedBoost',
+  'dive',
+  'bot',
+  'invulnerableUntil',
+  'attackUntil',
+  'emote',
+  'emoteUntil',
+  'score',
+  'kills',
+  'ack',
+  'jumps',
+  'jumpHeld',
+  'dashHeld',
+  'nextFlap',
+  'nextDash',
+  'dashUntil',
 ]);
 
 export function encodePlayer(player) {
-  return PLAYER_FIELDS.map(field => player[field]);
+  return PLAYER_FIELDS.map((field) => player[field]);
 }
 
 export function decodeSnapshot(snapshot) {
   if (snapshot?.type !== 'state' || snapshot.encoding !== COMPACT_PROTOCOL) return snapshot;
-  const players = snapshot.players.map(tuple => {
+  const players = snapshot.players.map((tuple) => {
     if (!Array.isArray(tuple) || tuple.length !== PLAYER_FIELDS.length) {
       throw new TypeError('Invalid compact-v1 player tuple');
     }

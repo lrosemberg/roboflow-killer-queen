@@ -13,14 +13,14 @@ The pacing update lengthens collection journeys, slows the crocodile, and adds l
 
 Measured on November 4, 2026 (Florida time), using ordinary bot inputs on private loopback servers. The human host stayed passive. Each before/after pair used the same bot seeds and room setup. Outcomes remain sensitive to combat and real-time scheduling; these six samples are not a promise of minimum or average human match duration.
 
-| Participants and host role | Before | After |
-| --- | --- | --- |
-| 10, Queen host | 28.5 s · Gator | 54.5 s · Gator |
-| 10, Worker host A | 43.6 s · Gator | 95.0 s · Military |
-| 10, Worker host B | 55.5 s · Military | 54.9 s · Military |
-| 4, Queen host | 19.4 s · Economic | 38.1 s · Economic |
-| 4, Worker host | 19.2 s · Economic | 50.1 s · Economic |
-| 10, first-room Worker host | 28.4 s · Gator | 109.8 s · Economic |
+| Participants and host role | Before            | After              |
+| -------------------------- | ----------------- | ------------------ |
+| 10, Queen host             | 28.5 s · Gator    | 54.5 s · Gator     |
+| 10, Worker host A          | 43.6 s · Gator    | 95.0 s · Military  |
+| 10, Worker host B          | 55.5 s · Military | 54.9 s · Military  |
+| 4, Queen host              | 19.4 s · Economic | 38.1 s · Economic  |
+| 4, Worker host             | 19.2 s · Economic | 50.1 s · Economic  |
+| 10, first-room Worker host | 28.4 s · Gator    | 109.8 s · Economic |
 
 Fast military victories remain possible. There is no artificial minimum round length, hidden invulnerability extension, or timeout winner.
 

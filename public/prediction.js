@@ -16,7 +16,9 @@ const STEP_SECONDS = 1 / 60;
  * consistent. Server snapshots always remain authoritative.
  */
 export class InputPrediction {
-  constructor() { this.reset(); }
+  constructor() {
+    this.reset();
+  }
 
   reset() {
     this.commands = [];
@@ -38,7 +40,9 @@ export class InputPrediction {
     for (const key of INPUT_KEYS) command.input[key] = !reset && input?.[key] === true;
     this.lastSeq = seq;
     this.commands.push(command);
-    this.commands = this.commands.filter(item => item.time >= command.time - HISTORY_MS).slice(-MAX_COMMANDS);
+    this.commands = this.commands
+      .filter((item) => item.time >= command.time - HISTORY_MS)
+      .slice(-MAX_COMMANDS);
   }
 
   /**
@@ -46,27 +50,56 @@ export class InputPrediction {
    * receivedAt uses the same monotonic clock as record(). serverTime is the
    * snapshot's clock, which movement uses for flap/cooldown timestamps.
    */
-  reconcile(authoritative, { ack = authoritative.ack, map, receivedAt, serverTime, active = true, riding = false, resetKey = '' }) {
+  reconcile(
+    authoritative,
+    {
+      ack = authoritative.ack,
+      map,
+      receivedAt,
+      serverTime,
+      active = true,
+      riding = false,
+      resetKey = '',
+    },
+  ) {
     const player = { ...authoritative };
     const upgrading = (player.upgradeUntil || 0) > serverTime;
     const nextContext = JSON.stringify([
-      resetKey, player.id, player.role, Boolean(player.alive),
-      Boolean(player.speedBoost), Boolean(riding), Boolean(active),
+      resetKey,
+      player.id,
+      player.role,
+      Boolean(player.alive),
+      Boolean(player.speedBoost),
+      Boolean(riding),
+      Boolean(active),
       player.invulnerableUntil || 0,
-      player.upgradeUntil || 0, player.upgradeGateId ?? null, upgrading,
+      player.upgradeUntil || 0,
+      player.upgradeGateId ?? null,
+      upgrading,
     ]);
     const validAck = Number.isSafeInteger(ack) && ack >= 0 ? ack : this.lastAck;
     const changed = this.context !== nextContext || validAck < this.lastAck;
     this.context = nextContext;
     this.lastAck = validAck;
     this.lastReplayMs = 0;
-    if (changed || !active || riding || upgrading || !player.alive || !map || !Number.isFinite(receivedAt) || !Number.isFinite(serverTime)) {
+    if (
+      changed ||
+      !active ||
+      riding ||
+      upgrading ||
+      !player.alive ||
+      !map ||
+      !Number.isFinite(receivedAt) ||
+      !Number.isFinite(serverTime)
+    ) {
       this.commands = [];
       return player;
     }
 
-    this.commands = this.commands.filter(command => command.seq > validAck && command.time >= receivedAt - HISTORY_MS);
-    const pending = this.commands.filter(command => command.time <= receivedAt);
+    this.commands = this.commands.filter(
+      (command) => command.seq > validAck && command.time >= receivedAt - HISTORY_MS,
+    );
+    const pending = this.commands.filter((command) => command.time <= receivedAt);
     if (!pending.length) return player;
 
     // Never run a delayed connection seconds into the future. When trimming a
@@ -86,7 +119,7 @@ export class InputPrediction {
       player.dashHeld = input.dash;
     }
     let simulatedMs = 0;
-    const advance = end => {
+    const advance = (end) => {
       let remaining = (end - cursor) / 1000;
       while (remaining > 1e-8) {
         const dt = Math.min(STEP_SECONDS, remaining);

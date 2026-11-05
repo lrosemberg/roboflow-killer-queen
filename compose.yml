@@ -2,7 +2,7 @@ services:
   miami-mayhem:
     build: .
     ports:
-      - "8787:8787"
+      - '8787:8787'
     environment:
       NODE_ENV: production
       PORT: 8787

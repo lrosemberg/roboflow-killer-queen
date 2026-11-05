@@ -164,3 +164,34 @@ test('server bots act on defensive targets using ordinary movement instead of te
   assert.equal(defender.botInput.jump,true); assert.equal(defender.botInput.down,false);
   assert.equal(room.botStrategy.defense.has(defender.id),false);
 });
+
+test('opening Queens anticipate a protected rival before spawn invulnerability expires', async t => {
+  const game=createGameServer({port:0,host:'127.0.0.1',countdownMs:0});
+  const {port}=await game.listen();t.after(()=>game.close());
+  const socket=new WebSocket(`ws://127.0.0.1:${port}/ws`);
+  let room;
+  await new Promise((resolve,reject)=>{
+    const timeout=setTimeout(()=>reject(new Error('Room setup timeout')),2500);
+    socket.on('error',reject);
+    socket.on('message',raw=>{
+      const msg=JSON.parse(raw);
+      if(msg.type==='welcome')socket.send(JSON.stringify({type:'create',private:true,botCount:9,role:'worker',botDifficulty:'normal'}));
+      if(msg.type==='joined'){room=game.rooms.get(msg.code);socket.send(JSON.stringify({type:'start'}));}
+      if(msg.type==='state'&&msg.status==='playing'){clearTimeout(timeout);resolve();}
+    });
+  });
+  const queen=[...room.players.values()].find(p=>p.bot&&p.team===0&&p.role==='queen');
+  const rival=[...room.players.values()].find(p=>p.bot&&p.team===1&&p.role==='queen');
+  assert.equal(queen.botSeed,3);assert.equal(rival.botSeed,2,'The fresh Worker-host opening uses the reported Queen pair');
+  assert.ok(queen.invulnerableUntil>Date.now());assert.ok(rival.invulnerableUntil>Date.now());
+  for(const p of room.players.values()){p.nextThink=Date.now()+100000;p.botInput={};p.botTarget=null;}
+  Object.assign(queen,{x:500,y:200,vx:0,vy:0,grounded:false,nextThink:0});
+  Object.assign(rival,{x:650,y:200,vx:0,vy:0,grounded:false});
+  room.botStrategy=null;
+  const timeout=Date.now()+1000;
+  while(queen.nextThink===0){assert.ok(Date.now()<timeout);await new Promise(resolve=>setTimeout(resolve,10));}
+  assert.ok(queen.botRetreatTarget?.x<500,'Risk awareness must detect the rival even while attacking is disallowed');
+  assert.equal(queen.botInput.left,true);assert.equal(queen.botInput.action,false);assert.equal(queen.botInput.down,false);
+  assert.equal(queen.queenLives,3);assert.equal(rival.queenLives,3);
+  assert.ok(rival.invulnerableUntil>Date.now(),'The reaction happened before protection expired');
+});

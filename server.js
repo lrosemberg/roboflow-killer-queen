@@ -340,7 +340,10 @@ export function createGameServer({ port = Number(process.env.PORT) || 8787, host
     const mates = r.botStrategy.teams[p.team];
     const job = r.botStrategy.jobs.get(p.id) || 'runner';
     const threat = q => distance(p, q) - (q.carrying || r.gator.riderId === q.id ? behavior.threatWeight : 0) + (q.role === 'queen' && behavior.threatWeight ? 80 : 0);
-    const enemies = r.botStrategy.teams[1 - p.team].filter(q => q.alive && now >= q.invulnerableUntil);
+    // Spawn protection prevents combat, not vision. Queens must see an armed
+    // rival approaching a gate before both protections expire together.
+    const visibleEnemies = r.botStrategy.teams[1 - p.team].filter(q => q.alive);
+    const enemies = visibleEnemies.filter(q => now >= q.invulnerableUntil);
     const assignment = r.botStrategy.defense.get(p.id);
     const objective = assignment && r.players.get(assignment.targetId);
     const protectedQueen = assignment?.protectedId && r.players.get(assignment.protectedId);
@@ -351,13 +354,13 @@ export function createGameServer({ port = Number(process.env.PORT) || 8787, host
     if (p.role === 'queen' || p.role === 'warrior') {
       const waitingCarrier = gate => mates.some(q => q.alive && q.role === 'worker' && q.carrying && distance(q, { x: gate.x + 20, y: gate.y + gate.h - PLAYER_H }) < 110);
       const gatePriority = gate => distance(p, gate) - (waitingCarrier(gate) ? 600 : 0);
-      const unclaimedGate = p.role === 'queen' && lowestBy(r.gates.filter(g => g.team !== p.team && isQueenGateSafe(p, g, enemies)), gatePriority);
+      const unclaimedGate = p.role === 'queen' && lowestBy(r.gates.filter(g => g.team !== p.team && isQueenGateSafe(p, g, visibleEnemies)), gatePriority);
       const escort = p.role === 'warrior' && lowestBy(mates.filter(q => q.alive && (q.carrying || q.role === 'queen')), q => distance(p, q));
       const engage = enemy && (distance(p, enemy) < behavior.engageDistance + (enemy.carrying ? behavior.threatWeight : 0) || escort && distance(escort, enemy) < 330);
       const patrolPile = r.map.berryPiles[p.botSeed % r.map.berryPiles.length];
       target = unclaimedGate && waitingCarrier(unclaimedGate) ? { x: unclaimedGate.x + 20, y: unclaimedGate.y + 25 } : engage ? { x: enemy.x, y: enemy.y - behavior.aimHeight } : unclaimedGate ? { x: unclaimedGate.x + 20, y: unclaimedGate.y + 25 } : escort ? { x: escort.x + (p.team === 0 ? 60 : -60), y: escort.y - 70 } : { x: patrolPile.x - 14, y: patrolPile.y - 90 };
       if (defenderTarget) target = { x: defenderTarget.x, y: defenderTarget.y - behavior.aimHeight };
-      const survival = queenRetreatTarget(p, enemies, r.map, r.botDifficulty);
+      const survival = queenRetreatTarget(p, visibleEnemies, r.map, r.botDifficulty);
       if (survival) { p.botRetreatTarget = survival; p.botRetreatUntil = now + 1100; }
       if (p.role === 'queen' && p.botRetreatTarget && now < p.botRetreatUntil) {
         target = p.botRetreatTarget;

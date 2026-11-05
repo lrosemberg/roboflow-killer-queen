@@ -52,6 +52,8 @@ Workers can spend a carried chip at a neutral or friendly AI1 station to gain Wa
 
 The Classic arena is 1,440 × 820, with grouped stockpiles, elevated HQs and a mirrored zig-zag climb. Workers must travel between supplies and the vault instead of repeating a short local loop. An uninterrupted crocodile ride from center takes 70 seconds, or about 47 seconds with an earned speed upgrade. A limited number of armed bots respond to opponents nearing an economic or gator victory; Queens retreat from unsafe fights and nearby warriors can protect a threatened Queen. XXL is 12,000 × 2,000 with a following camera. Player bodies do not create walls: teammates can pass through one another, and armed enemy contact uses combat rules.
 
+See [pacing changes and measured match samples](docs/BALANCE.md).
+
 ## Controls
 
 | Action | Keyboard |

@@ -79,6 +79,7 @@ const activityRows = new Map();
 let activityList,
   activitySignature = '';
 let rolePickerSignature = '',
+  scoreboardSignature = '',
   resultScene = null,
   pendingBriefingAction = null,
   publicRooms = [];
@@ -221,6 +222,7 @@ function receiveMapChange(data) {
   resetActivityFeed();
   setScoreboard(false);
   rolePickerSignature = '';
+  scoreboardSignature = '';
   resultScene = null;
   map = data.map;
   room.mapId = data.mapId || map.mapId;
@@ -519,6 +521,7 @@ function enterGame(data) {
   seq = 0;
   prediction.reset();
   rolePickerSignature = '';
+  scoreboardSignature = '';
   resultScene = null;
   clearCountdown();
   $('#home').hidden = true;
@@ -676,12 +679,13 @@ function updateHUD(player) {
   if ($('#current-bot-count'))
     $('#current-bot-count').textContent =
       state.status === 'playing'
-        ? `${state.botCount} bots · change between rounds`
-        : `${state.botCount} bots in this room`;
+        ? `${state.botCount} bot${state.botCount === 1 ? '' : 's'} · change between rounds`
+        : `${state.botCount} bot${state.botCount === 1 ? '' : 's'} in this room`;
   $('#apply-bots').disabled = state.status === 'playing';
   $('#menu-bots').disabled = state.status === 'playing';
   $('#lobby-bot-count-control').hidden = room.hostId !== localId;
-  $('#lobby-current-bot-count').textContent = `${state.botCount} bots in the room`;
+  $('#lobby-current-bot-count').textContent =
+    `${state.botCount} bot${state.botCount === 1 ? '' : 's'} in the room`;
   for (const id of ['#lobby-bots', '#menu-bots']) {
     const field = $(id);
     field.max = room.maxPlayers - 1;
@@ -901,6 +905,15 @@ function renderActivityFeed(entries) {
   }
 }
 function renderScoreboard() {
+  const players = state?.players || [],
+    signature = JSON.stringify([
+      room?.mode,
+      localId,
+      players.map((p) => [p.id, p.name, p.team, p.role, p.bot, p.score, p.kills]),
+    ]);
+  // Position snapshots arrive much more often than crew statistics change.
+  if (signature === scoreboardSignature) return;
+  scoreboardSignature = signature;
   const container = $('#scoreboard-players');
   container.replaceChildren();
   const label = document.createElement('p');
@@ -909,7 +922,7 @@ function renderScoreboard() {
       ? 'Nearby crew · XXL only streams players near your camera'
       : 'Your crew · DATA delivered / BONKS';
   container.append(label);
-  for (const p of [...(state?.players || [])].sort(
+  for (const p of [...players].sort(
     (a, b) =>
       a.team - b.team ||
       Number(b.role === 'queen') - Number(a.role === 'queen') ||
@@ -944,8 +957,15 @@ function formatTime(seconds) {
 function roleRoster() {
   return state?.lobbyPlayers || state?.players || [];
 }
-function renderRoleSelection() {
+function renderRoleSelection(force = false) {
   if (!state || !room) return;
+  // Result actions follow host changes independently of lobby rendering.
+  if (state.status === 'ended') {
+    $('#rematch').disabled = room.hostId !== localId;
+    $('#rematch').textContent =
+      room.hostId === localId ? 'NEXT ROUND LOBBY ↻' : 'WAITING FOR HOST’S NEXT ROUND';
+  }
+  if (!force && state.status === 'playing' && !$('#role-dialog').open) return;
   const roster = roleRoster(),
     me = roster.find((p) => p.id === localId) || predicted;
   if (!me) return;
@@ -969,7 +989,7 @@ function renderRoleSelection() {
     state.queenQuota,
     roster.map((p) => [p.id, p.name, p.team, p.role, p.bot]),
   ]);
-  if (signature === rolePickerSignature) return;
+  if (!force && signature === rolePickerSignature) return;
   rolePickerSignature = signature;
   const unavailableQueen = !myQueen && queens.length >= quota && !cpuQueen;
   for (const button of $$('[data-pick-role]')) {
@@ -1006,6 +1026,9 @@ function renderRoleSelection() {
   $('#role-dialog-title').textContent = editable
     ? 'Pick your starting role.'
     : 'Earn your next upgrade.';
+  // During play only the role guide is visible. Camera streaming must not
+  // rebuild an invisible lobby roster whenever nearby players change.
+  if (!editable) return;
   $('#lobby-rules').textContent =
     `Win: ${map.scoreTarget} chips · all enemy Queens · your getaway home`;
   const readiness = getLobbyReadiness(roster),
@@ -1136,11 +1159,6 @@ function renderRoleSelection() {
         ? 'WAITING FOR QUEENS'
         : 'START MATCH ↗';
   start.setAttribute('aria-describedby', 'lobby-status-detail');
-  if (state.status === 'ended') {
-    $('#rematch').disabled = room.hostId !== localId;
-    $('#rematch').textContent =
-      room.hostId === localId ? 'NEXT ROUND LOBBY ↻' : 'WAITING FOR HOST’S NEXT ROUND';
-  }
 }
 function chooseRole(role) {
   if (!room || !state) return;
@@ -1152,7 +1170,7 @@ function chooseRole(role) {
 }
 function openRoleGuide() {
   if (!room) return;
-  renderRoleSelection();
+  renderRoleSelection(true);
   showDialog('#role-dialog');
 }
 const VICTORY_COPY = {
@@ -1358,6 +1376,7 @@ function goHome() {
   prediction.reset();
   resultScene = null;
   rolePickerSignature = '';
+  scoreboardSignature = '';
   clearCountdown();
   resetActivityFeed();
   closeDialogs();

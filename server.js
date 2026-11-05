@@ -138,8 +138,18 @@ export function createGameServer({
   emptyRoomTtlMs = 15000,
   maintenanceMs = 15000,
   countdownMs = 3000,
+  resumeGraceMs = 15000,
+  eventHistoryLimit = 256,
 } = {}) {
   countdownMs = Number.isFinite(countdownMs) ? Math.max(0, Math.min(10000, countdownMs)) : 3000;
+  resumeGraceMs = Number.isFinite(resumeGraceMs)
+    ? Math.max(50, Math.min(30000, resumeGraceMs))
+    : 15000;
+  eventHistoryLimit = Number.isSafeInteger(eventHistoryLimit)
+    ? Math.max(8, Math.min(512, eventHistoryLimit))
+    : 256;
+  const sessions = new Map();
+  let closing = false;
   const hosted =
     process.env.PUBLIC_HOSTED === '1' ||
     Boolean(process.env.RAILWAY_PROJECT_ID || process.env.RENDER);
@@ -248,12 +258,58 @@ export function createGameServer({
   // Reuse each connection's deflate dictionary for similar consecutive states.
   // Small control replies skip compression, and gameplay never queues old states.
   const snapshotSending = new WeakSet();
+  const resyncSockets = new WeakSet();
+  function closeTransport(socket, code, reason) {
+    if (!socket || resyncSockets.has(socket)) return;
+    resyncSockets.add(socket);
+    socket.close(code, reason);
+    // A close frame can itself sit behind a blocked write. Bound the old
+    // transport's lifetime; the private session remains resumable afterward.
+    const timer = setTimeout(() => socket.terminate(), 300);
+    timer.unref();
+    socket.once('close', () => clearTimeout(timer));
+  }
+  const requireResync = (socket) => closeTransport(socket, 1013, 'Reconnect to resync');
   const send = (socket, data) => {
-    if (socket?.readyState === WebSocket.OPEN && socket.bufferedAmount < 256 * 1024)
-      socket.send(JSON.stringify(data), {
+    if (socket?.readyState !== WebSocket.OPEN) return false;
+    if (socket.bufferedAmount >= 256 * 1024) {
+      if (!['rooms', 'pong'].includes(data.type)) requireResync(socket);
+      return false;
+    }
+    socket.send(
+      JSON.stringify(data),
+      {
         compress: ['joined', 'map-changed'].includes(data.type),
-      });
+      },
+      (err) => {
+        if (err) requireResync(socket);
+      },
+    );
+    return true;
   };
+  function revokeSession(c) {
+    if (c.resumeToken) sessions.delete(c.resumeToken);
+    clearTimeout(c.resumeTimer);
+    c.resumeTimer = null;
+    c.resumeExpiresAt = 0;
+  }
+  function renewSession(c) {
+    revokeSession(c);
+    if (!c.resumable) return;
+    c.resumeToken = randomBytes(32).toString('base64url');
+    sessions.set(c.resumeToken, c);
+  }
+  const sessionFields = (c) => (c.resumable ? { resumeToken: c.resumeToken, resumeGraceMs } : {});
+  function acknowledgeEvents(c, id, epoch) {
+    if (
+      c.eventReplay &&
+      epoch === c.roomCode &&
+      Number.isSafeInteger(id) &&
+      id > c.eventAck &&
+      id <= c.eventSent
+    )
+      c.eventAck = id;
+  }
   const error = (client, message) => send(client.socket, { type: 'error', message });
   const broadcastRooms = () => {
     const data = { type: 'rooms', rooms: publicRooms() };
@@ -263,8 +319,12 @@ export function createGameServer({
   // leaves, respawns, or falls outside an XXL client's interest area.
   const eventPlayer = (p) => ({ id: p.id, name: p.name, team: p.team, bot: Boolean(p.bot) });
   const event = (r, type, x, y, team, text, details = {}) => {
-    r.events.push({ id: ++r.eventCounter, type, x, y, team, text, ...details });
+    const entry = { id: ++r.eventCounter, type, x, y, team, text, ...details };
+    r.events.push(entry);
+    r.eventHistory.push(entry);
     if (r.events.length > 80) r.events.shift();
+    if (r.eventHistory.length > eventHistoryLimit) r.eventHistory.shift();
+    r.snapshotDirty = true;
   };
   const crewFor = (r, team) => [...r.players.values()].filter((p) => p.team === team);
   const lobbyQuota = (r, team, extra = 0) => Math.ceil((crewFor(r, team).length + extra) / 5);
@@ -668,6 +728,9 @@ export function createGameServer({
       tick: 0,
       events: [],
       eventCounter: 0,
+      eventHistory: [],
+      snapshotDirty: true,
+      lastSnapshotAt: 0,
       emptySince: 0,
     };
     r.navigation = createNavigator(r.map);
@@ -709,11 +772,23 @@ export function createGameServer({
     if (replace?.role === 'queen' && r.status === 'playing') inheritQueenState(r, p, replace);
     r.players.set(c.id, p);
     c.roomCode = r.code;
+    c.eventAck = r.eventCounter;
+    c.eventSent = r.eventCounter;
     r.emptySince = 0;
     if (!r.hostId || !r.players.has(r.hostId)) r.hostId = c.id;
     addBots(r);
+    sendJoined(r, c);
+    event(r, 'join', p.x, p.y, p.team, `${p.name} joined the chaos`, { actor: eventPlayer(p) });
+    sendSnapshot(r, c);
+    broadcastRooms();
+  }
+  function sendJoined(r, c, resumed = false) {
     send(c.socket, {
       type: 'joined',
+      resumed,
+      ack: r.players.get(c.id)?.ack || 0,
+      ...sessionFields(c),
+      ...(c.eventReplay ? { eventEpoch: r.code, eventAck: c.eventAck } : {}),
       id: c.id,
       code: r.code,
       hostId: r.hostId,
@@ -731,9 +806,68 @@ export function createGameServer({
       },
       players: [...r.players.values()].map(publicPlayer),
     });
-    event(r, 'join', p.x, p.y, p.team, `${p.name} joined the chaos`, { actor: eventPlayer(p) });
-    sendSnapshot(r, c);
-    broadcastRooms();
+  }
+  function resumeSession(c, msg, socket) {
+    const previous =
+      typeof msg.token === 'string' && msg.token.length === 43 ? sessions.get(msg.token) : null;
+    const room = previous && rooms.get(previous.roomCode);
+    if (
+      !c.resumable ||
+      c.roomCode ||
+      !previous ||
+      !room?.players.has(previous.id) ||
+      (previous.resumeExpiresAt && previous.resumeExpiresAt <= Date.now())
+    ) {
+      send(socket, { type: 'resume-failed', reason: 'expired-or-invalid' });
+      return c;
+    }
+    const oldSocket = previous.socket;
+    revokeSession(c);
+    clients.delete(c.id);
+    clearTimeout(previous.resumeTimer);
+    previous.resumeTimer = null;
+    previous.resumeExpiresAt = 0;
+    previous.socket = socket;
+    previous.compact = c.compact;
+    previous.eventReplay = c.eventReplay;
+    previous.rateCount = c.rateCount;
+    previous.rateWindow = c.rateWindow;
+    previous.alive = true;
+    clients.set(previous.id, previous);
+    // Superseded sockets cannot remove or control the restored player.
+    if (oldSocket !== socket && oldSocket.readyState === WebSocket.OPEN)
+      closeTransport(oldSocket, 4000, 'Session resumed elsewhere');
+    stopDisconnectedPlayer(room, room.players.get(previous.id));
+    acknowledgeEvents(previous, msg.eventAck, msg.eventEpoch);
+    sendJoined(room, previous, true);
+    sendSnapshot(room, previous);
+    return previous;
+  }
+  function stopDisconnectedPlayer(room, player) {
+    resetPlayerInput(player);
+    player.jumpHeld = false;
+    player.dashHeld = false;
+    player.lastInput = 0;
+    player.vx = 0;
+    player.dive = false;
+    if (room.gator.riderId === player.id) room.gator.riderId = null;
+  }
+  function disconnect(c) {
+    clients.delete(c.id);
+    const room = rooms.get(c.roomCode),
+      player = room?.players.get(c.id);
+    if (!closing && c.resumable && player) {
+      stopDisconnectedPlayer(room, player);
+      c.resumeExpiresAt = Date.now() + resumeGraceMs;
+      c.resumeTimer = setTimeout(() => {
+        revokeSession(c);
+        leaveRoom(c);
+      }, resumeGraceMs);
+      c.resumeTimer.unref();
+    } else {
+      revokeSession(c);
+      leaveRoom(c);
+    }
   }
   function leaveRoom(c, notify = false) {
     const r = rooms.get(c.roomCode);
@@ -745,7 +879,13 @@ export function createGameServer({
       else addBots(r);
     }
     c.roomCode = null;
-    if (notify) send(c.socket, { type: 'left' });
+    c.eventAck = 0;
+    c.eventSent = 0;
+    if (r) r.snapshotDirty = true;
+    if (notify) {
+      renewSession(c);
+      send(c.socket, { type: 'left', ...sessionFields(c) });
+    }
     if (r) broadcastRooms();
   }
   function publicPlayer(p) {
@@ -857,7 +997,6 @@ export function createGameServer({
         r.status === 'waiting'
           ? 0
           : Math.floor((r.victory?.durationMs ?? Math.max(0, now - r.startedAt)) / 1000),
-      events: r.events,
       playerCount: humanCount,
       botCount: players.length - humanCount,
       configuredBots: r.botTarget,
@@ -865,7 +1004,7 @@ export function createGameServer({
       hostId: r.hostId,
       remaining: null,
     }).slice(0, -1);
-    return { players, berries, head, packets: new Map() };
+    return { players, berries, head, events: r.events, packets: new Map() };
   }
   function sendSnapshot(r, c, cachedSnapshot = null, now = Date.now()) {
     const local = r.players.get(c.id);
@@ -895,17 +1034,31 @@ export function createGameServer({
     // Crowded clients often have the exact same view and input ack. Reuse the
     // immutable UTF-8 packet for that snapshot only; each socket still owns its
     // deflate dictionary and backpressure. No interest-window rounding/deltas.
-    const key = `${Number(c.compact)}/${local.ack}/${visible.map((p) => p.id).join(',')}/${berries.map((b) => b.id).join(',')}`;
+    const eventKey = c.eventReplay ? c.eventAck : 'legacy';
+    const key = `${Number(c.compact)}/${eventKey}/${local.ack}/${visible.map((p) => p.id).join(',')}/${berries.map((b) => b.id).join(',')}`;
     let data = snapshot.packets.get(key);
     if (!data) {
+      const replay = c.eventReplay
+        ? {
+            eventEpoch: r.code,
+            eventLatest: r.eventCounter,
+            eventFloor: r.eventHistory[0]?.id ?? r.eventCounter + 1,
+            events: r.eventHistory.filter((e) => e.id > c.eventAck),
+          }
+        : { events: snapshot.events };
+      const eventJson = JSON.stringify(replay).slice(1, -1);
       const encoding = c.compact ? `,"encoding":"${COMPACT_PROTOCOL}"` : '';
       data = Buffer.from(
-        `${snapshot.head}${encoding},"ack":${local.ack},"players":[${visible.map((p) => (c.compact ? p.compactJson : p.json)).join(',')}],"berries":[${berries.map((b) => b.json).join(',')}]}`,
+        `${snapshot.head},${eventJson}${encoding},"ack":${local.ack},"players":[${visible.map((p) => (c.compact ? p.compactJson : p.json)).join(',')}],"berries":[${berries.map((b) => b.json).join(',')}]}`,
       );
       snapshot.packets.set(key, data);
     }
+    if (c.eventReplay) c.eventSent = r.eventCounter;
     snapshotSending.add(socket);
-    socket.send(data, { compress: true, binary: false }, () => snapshotSending.delete(socket));
+    socket.send(data, { compress: true, binary: false }, (err) => {
+      snapshotSending.delete(socket);
+      if (err) requireResync(socket);
+    });
   }
   function win(r, team, type, actor, now) {
     if (r.status !== 'playing') return;
@@ -1334,12 +1487,16 @@ export function createGameServer({
   }
   wss.on('connection', (socket, request) => {
     if (clients.size >= 1000) return socket.close(1013, 'Server is full');
-    const compact =
-      new URL(request.url, 'http://localhost').searchParams.get('protocol') === COMPACT_PROTOCOL;
-    const c = {
+    const params = new URL(request.url, 'http://localhost').searchParams;
+    const compact = params.get('protocol') === COMPACT_PROTOCOL;
+    let c = {
       id: `p-${++idCounter}`,
       socket,
       compact,
+      resumable: params.get('resume') === '1',
+      eventReplay: params.get('events') === '1',
+      eventAck: 0,
+      eventSent: 0,
       roomCode: null,
       rateCount: 0,
       rateWindow: Date.now(),
@@ -1347,12 +1504,14 @@ export function createGameServer({
       lastRoomAction: 0,
     };
     clients.set(c.id, c);
-    send(socket, { type: 'welcome', id: c.id });
+    renewSession(c);
+    send(socket, { type: 'welcome', id: c.id, ...sessionFields(c) });
     send(socket, { type: 'rooms', rooms: publicRooms() });
     socket.on('pong', () => {
-      c.alive = true;
+      if (c.socket === socket) c.alive = true;
     });
     socket.on('message', (raw) => {
+      if (c.socket !== socket || socket.readyState !== WebSocket.OPEN) return;
       const now = Date.now();
       if (now - c.rateWindow >= 1000) {
         c.rateWindow = now;
@@ -1366,6 +1525,12 @@ export function createGameServer({
         return error(c, 'Invalid message');
       }
       if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return;
+      if (msg.type === 'resume') {
+        c = resumeSession(c, msg, socket);
+        return;
+      }
+      acknowledgeEvents(c, msg.type === 'event-ack' ? msg.id : msg.eventAck, msg.eventEpoch);
+      if (msg.type === 'event-ack') return;
       const r = rooms.get(c.roomCode);
       const p = r?.players.get(c.id);
       if (msg.type === 'ping')
@@ -1385,6 +1550,7 @@ export function createGameServer({
       }
       if (msg.type === 'emote') {
         if (p && now >= p.nextEmote && ['GG', 'HEY', 'LOL'].includes(msg.emoji)) {
+          r.snapshotDirty = true;
           p.emote = msg.emoji;
           p.emoteUntil = now + 2200;
           p.nextEmote = now + 1200;
@@ -1407,6 +1573,7 @@ export function createGameServer({
             'Change the bot crew between rounds. Queen slots are fixed during a match.',
           );
         if (!Number.isFinite(msg.count)) return error(c, 'Choose a valid bot count.');
+        r.snapshotDirty = true;
         r.botTarget = Math.max(0, Math.min(r.maxPlayers - 1, Math.floor(msg.count)));
         addBots(r);
         broadcastRooms();
@@ -1421,6 +1588,7 @@ export function createGameServer({
         if (r.status === 'playing') return error(c, 'Change bot difficulty between rounds.');
         if (!BOT_DIFFICULTIES.includes(msg.difficulty))
           return error(c, 'Choose Easy, Normal or Hard bot difficulty.');
+        r.snapshotDirty = true;
         r.botDifficulty = msg.difficulty;
         r.botStrategy = null;
         for (const bot of bots(r)) bot.nextThink = 0;
@@ -1479,8 +1647,7 @@ export function createGameServer({
       else newRoom(c, { ...msg, botCount: mode === 'xxl' ? 23 : 9, private: false }, true);
     });
     socket.on('close', () => {
-      leaveRoom(c);
-      clients.delete(c.id);
+      if (c.socket === socket) disconnect(c);
     });
     socket.on('error', () => {});
   });
@@ -1506,6 +1673,9 @@ export function createGameServer({
     const t0 = performance.now();
     const now = Date.now();
     for (const r of rooms.values()) {
+      if (r.status !== 'playing' && !r.snapshotDirty && now - r.lastSnapshotAt < 250) continue;
+      r.lastSnapshotAt = now;
+      r.snapshotDirty = false;
       const recipients = humans(r)
         .map((p) => clients.get(p.id))
         .filter(Boolean);
@@ -1549,6 +1719,9 @@ export function createGameServer({
       return server.address();
     },
     async close() {
+      closing = true;
+      for (const c of sessions.values()) clearTimeout(c.resumeTimer);
+      sessions.clear();
       clearInterval(tickTimer);
       clearInterval(snapshotTimer);
       clearInterval(maintenanceTimer);

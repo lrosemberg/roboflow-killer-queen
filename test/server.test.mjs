@@ -85,6 +85,79 @@ async function start(host) {
   return host.wait('state', (s) => s.status === 'playing');
 }
 
+for (const role of ['queen', 'warrior'])
+  test(`${role}: authoritative flight ignores held packets and preserves same-frame represses`, async (t) => {
+    const { game, room: r, host, player: p } = await setup(t, { botCount: 1 });
+    await start(host);
+    for (const bot of r.players.values()) if (bot.bot) stop(bot);
+    // An open-air fixture isolates flap authority from platform catches.
+    r.map.platforms = [r.map.platforms[0]];
+    Object.assign(p, {
+      role,
+      x: 500,
+      y: floorY(r),
+      vx: 0,
+      vy: 0,
+      grounded: true,
+      jumpHeld: false,
+      nextFlap: 0,
+      invulnerableUntil: Date.now() + 10000,
+    });
+    let seq = 0;
+    const packet = (data) =>
+      game.clients
+        .get(host.id)
+        .socket.emit(
+          'message',
+          Buffer.from(JSON.stringify({ type: 'input', seq: ++seq, ...data })),
+        );
+    packet({ jump: true });
+    await waitFor(() => p.nextFlap > 0);
+    const first = p.nextFlap;
+    // Duplicate held packets cannot act as new button presses.
+    packet({ jump: true });
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.equal(p.nextFlap, first);
+    assert.ok(p.vy > 0);
+    packet({});
+    packet({ jump: true });
+    packet({});
+    assert.equal(p.input.jump, false);
+    await waitFor(() => p.nextFlap > first);
+    assert.ok(p.vy < -300);
+    const second = p.nextFlap;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(p.nextFlap, second, 'Subframe press is consumed exactly once');
+  });
+
+for (const role of ['queen', 'warrior'])
+  test(`${role}: actual server bots convert cached ascent into discrete legal flaps`, async (t) => {
+    const { room: r, host, player: human } = await setup(t, { botCount: 1 });
+    await start(host);
+    r.map.platforms = [r.map.platforms[0]];
+    human.invulnerableUntil = Date.now() + 10000;
+    const bot = [...r.players.values()].find((p) => p.bot);
+    stop(bot);
+    Object.assign(bot, {
+      role,
+      x: 900,
+      y: floorY(r),
+      alive: true,
+      grounded: true,
+      jumpHeld: false,
+      nextFlap: 0,
+      botInput: { jump: true },
+      invulnerableUntil: Date.now() + 10000,
+    });
+    await waitFor(() => bot.nextFlap > 0);
+    const first = bot.nextFlap;
+    await waitFor(() => !bot.jumpHeld);
+    await waitFor(() => bot.nextFlap > first);
+    assert.ok(bot.nextFlap - first >= (role === 'queen' ? 190 : 220));
+    assert.ok(bot.y < floorY(r) - 50);
+    assert.equal(bot.botInput.jump, true, 'Strategy desire stays cached while actual input pulses');
+  });
+
 test('same-frame input packets preserve jump and action taps, but explicit resets and dead-player input cannot queue a respawn jump', async (t) => {
   const { game, room: r, host, player: p } = await setup(t, { botCount: 1 });
   await start(host);
@@ -133,6 +206,7 @@ test('same-frame input packets preserve jump and action taps, but explicit reset
   await waitFor(() => r.gator.riderId === null);
 
   p.alive = false;
+  p.bumpVx = 180;
   p.respawnAt = Date.now() + 70;
   p.vx = 0;
   p.vy = 0;
@@ -144,6 +218,69 @@ test('same-frame input packets preserve jump and action taps, but explicit reset
   await new Promise((resolve) => setTimeout(resolve, 40));
   assert.equal(p.grounded, true);
   assert.equal(p.vy, 0);
+  assert.equal(p.bumpVx, 0, "Respawn clears the previous life's bounce");
+});
+
+test('119 overlapping enemy workers cannot pin a player against the XXL boundary', async (t) => {
+  const {
+    room: r,
+    host,
+    player: p,
+  } = await setup(t, { mode: 'xxl', botCount: 119, role: 'worker' });
+  await start(host);
+  for (const other of r.players.values()) {
+    stop(other);
+    Object.assign(other, {
+      role: 'worker',
+      x: 5,
+      y: floorY(r),
+      grounded: true,
+      invulnerableUntil: 0,
+    });
+    if (other !== p) other.team = 1 - p.team;
+  }
+  p.x = 0;
+  host.send({ type: 'input', seq: 1, right: true });
+  await waitFor(() => p.x > 150);
+  assert.ok(p.vx > 0);
+  assert.equal(p.alive, true);
+});
+
+test('an opposing nonlethal bump interrupts an AI1 channel without consuming its chip', async (t) => {
+  const { room: r, host, player: p } = await setup(t, { botCount: 3, role: 'worker' });
+  await start(host);
+  for (const bot of r.players.values())
+    if (bot.bot) {
+      stop(bot);
+      bot.x = 1200;
+      bot.invulnerableUntil = Date.now() + 10000;
+    }
+  const enemy = [...r.players.values()].find((q) => q.team !== p.team),
+    gate = r.gates[0];
+  stop(p);
+  stop(enemy);
+  awardChip(r, p);
+  Object.assign(p, {
+    role: 'worker',
+    x: gate.x + 20,
+    y: gate.y + gate.h - 36,
+    grounded: true,
+    invulnerableUntil: 0,
+    upgradeGateId: gate.id,
+    upgradeKind: gate.kind,
+    upgradeUntil: Date.now() + 1000,
+  });
+  Object.assign(enemy, {
+    role: 'worker',
+    x: p.x + 10,
+    y: p.y,
+    grounded: true,
+    invulnerableUntil: 0,
+  });
+  await waitFor(() => p.upgradeUntil === 0);
+  assert.equal(p.carrying, true);
+  assert.equal(p.alive, true);
+  assert.ok(p.bumpVx < 0);
 });
 
 test('a full XXL team can overlap without blocking left or right movement or causing friendly damage', async (t) => {
@@ -182,7 +319,7 @@ test('a full XXL team can overlap without blocking left or right movement or cau
   );
 });
 
-test('opposing workers pass through each other while armed enemy contact causes a knockout rather than body blocking', async (t) => {
+test('opposing workers bump without trapping each other and an armed enemy must attack from above', async (t) => {
   const { room: r, host, player: p } = await setup(t, { botCount: 3, role: 'worker' });
   await start(host);
   for (const other of r.players.values()) {
@@ -205,10 +342,10 @@ test('opposing workers pass through each other while armed enemy contact causes 
   await waitFor(() => p.x > enemy.x + 45);
   assert.equal(p.alive, true);
   assert.equal(enemy.alive, true);
-  assert.equal(p.vx, 270);
+  assert.ok(p.vx > 0, 'The opposing bounce cannot stop the commanded escape');
   enemy.role = 'warrior';
   enemy.x = p.x + 28;
-  enemy.y = p.y;
+  enemy.y = p.y - 20;
   enemy.facing = -1;
   await waitFor(() => !p.alive);
   assert.equal(enemy.kills, 1);

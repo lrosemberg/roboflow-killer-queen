@@ -50,6 +50,7 @@ export function decodeSnapshot(snapshot) {
     }
     const player = {};
     for (let i = 0; i < PLAYER_FIELDS.length; i++) player[PLAYER_FIELDS[i]] = tuple[i];
+    player.bumpVx = Number.isFinite(snapshot.bumps?.[player.id]) ? snapshot.bumps[player.id] : 0;
     return player;
   });
   return { ...snapshot, players };

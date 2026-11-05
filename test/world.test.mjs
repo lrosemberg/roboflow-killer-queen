@@ -81,7 +81,7 @@ test('economic goals retain the twelve-chip minimum and scale above ten particip
     resourceCount: 60,
   });
 });
-test('workers have a single jump that can reach 180px platforms; tapping midair does not grant another', () => {
+test('workers have a single variable-height jump; releasing cuts ascent and midair taps add no jump', () => {
   const p = player();
   const m = createMap();
   movePlayer(p, { jump: true }, m, 1 / 60, 1000);
@@ -97,7 +97,15 @@ test('workers have a single jump that can reach 180px platforms; tapping midair 
     movePlayer(p, {}, m, 1 / 60, 1051 + i * 17);
     minY = Math.min(minY, p.y);
   }
-  assert.ok(704 - minY > 180);
+  assert.ok(704 - minY < 100, 'A released tap makes a short hop');
+  const held = player();
+  let heldMinY = held.y;
+  for (let i = 0; i < 40; i++) {
+    movePlayer(held, { jump: true }, m, 1 / 60, 1000 + i * 17);
+    heldMinY = Math.min(heldMinY, held.y);
+  }
+  assert.ok(704 - heldMinY > 180, 'Holding retains the full platform-reaching jump');
+  assert.ok(heldMinY < minY - 100);
 });
 test('one-way platforms catch downward movement and down drops through them', () => {
   const map = createMap();
@@ -113,8 +121,8 @@ test('Queen flight and dive differ from earned speed; workers have no universal 
   const map = createMap();
   const p = player({ role: 'queen' });
   for (let i = 0; i < 60; i++)
-    movePlayer(p, { jump: true, left: true }, map, 1 / 60, 1000 + i * 17);
-  assert.ok(p.y < 1000);
+    movePlayer(p, { jump: i % 15 === 0, left: true }, map, 1 / 60, 1000 + i * 17);
+  assert.ok(p.y < 500);
   assert.equal(p.x, 0);
   movePlayer(p, { down: true, right: true }, map, 1 / 60, 3000);
   assert.equal(p.vy, 1150);

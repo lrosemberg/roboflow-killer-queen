@@ -23,7 +23,7 @@ Add the new ID to `LAYOUTS` in `shared/world.js` and to its XXL station offsets.
 
 | Property                | Classic                                 | XXL                         |
 | ----------------------- | --------------------------------------- | --------------------------- |
-| World dimensions        | 1,440 × 820                             | 12,000 × 2,000              |
+| World dimensions        | 1,440 × 820                             | 7,200 × 1,600               |
 | Capacity                | 10 total players                        | 120 total players           |
 | Supply locations        | 6 grouped piles                         | 12 grouped piles            |
 | Starting stock          | `max(60, 6 × participants)`             | `max(60, 6 × participants)` |
@@ -37,7 +37,7 @@ For Classic, `steps` lists four **left-side** ledges as `[x, y, width]`. The bui
 
 The tested recipes use alternating outer and inner ledges with consecutive rises of 106–112 world pixels. Two tiers together exceed the ordinary worker's roughly 199-pixel ballistic jump apex, preventing a straight climb that skips the delivery route. Individual gaps must still be reachable with the navigation safety margin. Never infer reachability from a screenshot: run the actual movement tests with ordinary and speed-upgraded workers. Full routes from an HQ to a pile and back should take approximately 7–11 seconds in the deterministic center-to-center test. Actual pickup and doorway tolerances shorten those measurements slightly.
 
-For XXL, `xxl` defines `spacing`, `stagger`, three repeating platform `widths`, and the first-column `offset`. Rows rise in reachable 180-pixel increments. New destinations mirror the full skyline and add center connectors. Miami preserves its previous skyline. Twelve piles span several districts; avoid placing the nearest supply immediately beside an HQ or funneling a 120-player room into one central pile. Raised piles snap to an actual first-tier platform. Ground and raised supplies must both reach either HQ.
+For XXL, `xxl` defines `spacing`, `stagger`, three repeating platform `widths`, and the first-column `offset`. Rows rise in reachable 180-pixel increments. Every destination mirrors the full skyline and adds center connectors, including Miami. Twelve piles span several districts; avoid placing the nearest supply immediately beside an HQ or funneling a 120-player room into one central pile. Raised piles snap to an actual first-tier platform. Ground and raised supplies must both reach either HQ.
 
 Leave enough room between pile racks, station silhouettes and doors for players to read them. Scenery can overlap visually behind gameplay, but must not create invisible collisions, hide a landing edge or suggest a solid floor where none exists.
 
@@ -45,7 +45,7 @@ Leave enough room between pile racks, station silhouettes and doors for players 
 
 Add a preview SVG and a renderer theme keyed by the catalog ID. Queen styles and mounts can change their shape and animations, but retain team colors, local-player markers, life indicators and the existing collision dimensions. The wire objective remains `winType: 'gator'` for compatibility even when its visible character is a cable car, subway train, delivery bike or riverboat. Use the catalog ride name in player-facing explanations and victory copy. Brazil represents a Rio de Janeiro route, with an iFood backpack on its delivery bike. Visible finish arches must be anchored at the actual `gatorTrack.x1` and `gatorTrack.x2` trigger coordinates and clearly identify which team owns each goal; decorative goals must never imply a different finish point.
 
-Inspect both notebook and touch landscape layouts. Classic must keep the whole arena readable; XXL must follow the local player. The mobile joystick stays on the right and action buttons on the left. Background decoration must not intercept input.
+Inspect both notebook and touch landscape layouts. Classic must keep the whole arena readable; XXL must follow the local player. The mobile joystick stays on the right and action buttons on the left. Each fresh jump press flaps once for Queens and Warriors; holding does not repeat. Bots generate the same press/release inputs and obey the same cooldown, gravity and collision rules. Background decoration must not intercept input.
 
 ## Room protocol
 
@@ -60,3 +60,15 @@ Only the current host can send `{ type: 'map', mapId }`, and only in a waiting l
 3. Use `scripts/map-smoke.mjs` against a fresh local server and the deployment. Test both Classic and XXL with two connected clients. A single browser preview does not verify multiplayer propagation.
 4. Inspect the workshop and real rooms in the browser. Capture Classic, an XXL camera view, themed Queens and rides, lobby selection and a victory screen.
 5. For meaningful geometry changes, repeat unopposed delivery measurements and natural bot rounds. Report their limits: a deterministic route is not a promise about match duration, and bot simulations are not 120 physical players.
+
+## Arcade flight reference
+
+The official [Killer Queen how-to](https://killerqueenarcade.com/howtoplay) gives flight to Queens and upgraded Warriors, and a downward dive to Queens. Developer BumbleBear’s [release notes](https://bumblebeargames.com/blogs/news/changelogs) explicitly describe the “tap to flap” prompt. RoboQueen follows that press-based interaction; its numeric speeds and cooldowns are game-specific, not a claim to reproduce unpublished arcade constants.
+
+A valid fresh press applies the existing upward speed of 430 px/s for a Queen or 390 px/s for a Warrior, with respective minimum intervals of 190 and 220 ms. Presses during the cooldown or a Queen dive are consumed immediately. They never queue a later flap. Network input retains a single rising edge until the next physics step so a complete rapid tap is not lost; lifecycle resets discard it. Client prediction uses the same edge buffering and movement function.
+
+The first-person [KQPDX player guide](https://killerqueenpdx.squarespace.com/blog/how-to-play) also documents variable worker jump height, above-and-facing military contact, nonlethal bumps and screen wrapping. RoboQueen implements release-shortened worker jumps, height-and-facing sword contact, downward Queen dives and bounded opposing-player bumps that can interrupt AI1 installation. Friendly players pass through each other, and a crowd cannot accumulate enough push to stop a player walking away. The guide describes observed rules, not the arcade’s internal physics constants.
+
+Deliberate adaptation: these themed maps have closed ends, finish arches and an XXL following camera; they do not wrap around. The exact arcade gravity, acceleration, friction and jump values were not published in the official sources reviewed. RoboQueen retains its tuned movement values and does not claim bit-identical arcade physics. The operator manual covers installation and service rather than those simulation parameters.
+
+Nonlethal bump velocity is authoritative. Legacy player objects include `bumpVx`; compact-v1 retains its original 34-field tuple and sends active impulses in the sparse snapshot `bumps` extension. Current clients restore missing entries to zero and use shared decay during prediction. Respawns and new rounds clear the impulse.

@@ -5,6 +5,7 @@ export const PLAYER_H = 36;
 export const SPEED = 270;
 export const GRAVITY = 1450;
 export const JUMP_SPEED = 760;
+export const SHORT_JUMP_SPEED = 340;
 export const TICK_RATE = 60;
 export const SCORE_TARGETS = Object.freeze({ normal: 12, xxl: 144 });
 export const BOT_DIFFICULTIES = Object.freeze(['easy', 'normal', 'hard']);
@@ -121,8 +122,8 @@ export function createMap(mode = 'normal', totalPlayers, mapId = DEFAULT_MAP_ID)
   mode = mode === 'xxl' ? 'xxl' : 'normal';
   const definition = getMapDefinition(mapId),
     layout = LAYOUTS[definition.id];
-  const width = mode === 'xxl' ? 12000 : 1440;
-  const height = mode === 'xxl' ? 2000 : 820;
+  const width = mode === 'xxl' ? 7200 : 1440;
+  const height = mode === 'xxl' ? 1600 : 820;
   const floor = height - 80;
   const platforms = [{ x: 0, y: floor, w: width, h: 80, kind: 'ground' }];
   const ledge = (x, y, w, kind = 'neon') => platforms.push({ x, y, w, h: 22, kind });
@@ -143,16 +144,11 @@ export function createMap(mode = 'normal', totalPlayers, mapId = DEFAULT_MAP_ID)
       const y = floor - 180 * (row + 1),
         w = widths[row % widths.length],
         kind = row % 2 ? 'roof' : 'neon';
-      if (definition.id === DEFAULT_MAP_ID) {
-        // Preserve the existing Miami XXL arena for old rooms and links.
-        for (let x = offset + (row % 2) * stagger; x < width - 250; x += spacing)
-          ledge(x, y, Math.min(width - x, w), kind);
-      } else {
-        // Other districts mirror their entire skyline, including the center.
-        for (let x = offset + (row % 2) * stagger; x + w <= width / 2 - 50; x += spacing)
-          mirrored(x, y, w, kind);
-        ledge(width / 2 - 120, y, 240, kind);
-      }
+      // Every district has the same approach from either team's HQ. Retain
+      // full-size platforms and reachable rises instead of scaling collisions.
+      for (let x = offset + (row % 2) * stagger; x + w <= width / 2 - 50; x += spacing)
+        mirrored(x, y, w, kind);
+      ledge(width / 2 - 120, y, 240, kind);
     }
     mirrored(90, floor - 540, 290, 'roof');
   }
@@ -196,12 +192,14 @@ export function createMap(mode = 'normal', totalPlayers, mapId = DEFAULT_MAP_ID)
   } else {
     for (const fraction of [0.22, 0.32, 0.44, 0.56, 0.68, 0.78])
       addPile(Math.round(width * fraction), floor - 24);
-    for (const fraction of [0.2, 0.3, 0.42, 0.58, 0.7, 0.8]) {
+    for (const fraction of [0.2, 0.3, 0.42]) {
       const target = width * fraction;
       const support = platforms
         .filter((p) => p.y === floor - 180)
         .sort((a, b) => Math.abs(a.x + a.w / 2 - target) - Math.abs(b.x + b.w / 2 - target))[0];
-      addPile(Math.round(support.x + support.w / 2), support.y - 22);
+      const x = Math.round(support.x + support.w / 2);
+      addPile(x, support.y - 22);
+      addPile(width - x, support.y - 22);
     }
   }
   return configureMapEconomy(
@@ -250,7 +248,9 @@ export function movePlayer(p, input, map, dt, now) {
   if (p.grounded) p.jumps = 0;
   p.dive = p.role === 'queen' && !p.grounded && Boolean(input.down || input.dash);
   if (p.role === 'queen' || p.role === 'warrior') {
-    if (!p.dive && input.jump && now >= (p.nextFlap || 0)) {
+    // One physical press produces one flap. Holding, a cooldown-time press
+    // or a press during a dive must never schedule another flap for later.
+    if (!p.dive && jumpPressed && now >= (p.nextFlap || 0)) {
       p.vy = p.role === 'queen' ? -430 : -390;
       p.grounded = false;
       p.nextFlap = now + (p.role === 'queen' ? 190 : 220);
@@ -260,10 +260,15 @@ export function movePlayer(p, input, map, dt, now) {
     p.grounded = false;
     p.jumps = (p.jumps || 0) + 1;
   }
+  // Workers choose jump height by releasing early. Holding keeps the original
+  // full ballistic arc, so every existing platform remains reachable.
+  if (p.role === 'worker' && !input.jump && p.vy < -SHORT_JUMP_SPEED) p.vy = -SHORT_JUMP_SPEED;
   // The arcade has no universal dash. Speed comes from spending a chip at a gate.
   p.dashUntil = 0;
   p.nextDash = 0;
-  p.vx = dir * SPEED * (p.speedBoost && p.role !== 'queen' ? 1.35 : 1);
+  const bump = Math.max(-180, Math.min(180, p.bumpVx || 0));
+  p.bumpVx = Math.abs(bump) < 0.5 ? 0 : bump * Math.exp(-12 * dt);
+  p.vx = dir * SPEED * (p.speedBoost && p.role !== 'queen' ? 1.35 : 1) + p.bumpVx;
   const beforeBottom = p.y + PLAYER_H;
   p.vy = p.dive ? 1150 : Math.min((p.vy || 0) + GRAVITY * dt, 900);
   p.x = Math.max(0, Math.min(map.width - PLAYER_W, p.x + p.vx * dt));

@@ -204,3 +204,45 @@ test('AI1 channel entry, active channel and cancellation discard stale movement,
   prediction.record({ seq: 4, input: { right: true }, time: 320 });
   near(prediction.reconcile(cancelled, options(400)).x, player.x + SPEED * 0.08);
 });
+
+for (const role of ['queen', 'warrior']) {
+  test(`${role} prediction preserves a complete same-time flap tap without replaying it twice`, () => {
+    const prediction = new InputPrediction();
+    const player = { ...worker(), role, grounded: false, y: 400, vy: 100 };
+    begin(prediction, player);
+    prediction.record({ seq: 1, input: { jump: true }, time: 10 });
+    prediction.record({ seq: 2, input: {}, time: 10 });
+    const predicted = prediction.reconcile(player, options(50));
+    assert.ok(predicted.vy < -300);
+    assert.ok(predicted.nextFlap > 10000);
+    const acknowledged = { ...predicted, ack: 2 };
+    assert.deepEqual(prediction.reconcile(acknowledged, options(100, 2)), acknowledged);
+  });
+
+  test(`${role} prediction retains same-time release/repress after a held authoritative jump`, () => {
+    const prediction = new InputPrediction();
+    const player = { ...worker(), role, grounded: false, y: 400, vy: 100, jumpHeld: true };
+    begin(prediction, player);
+    prediction.record({ seq: 1, input: {}, time: 10 });
+    prediction.record({ seq: 2, input: { jump: true }, time: 10 });
+    const predicted = prediction.reconcile(player, options(50));
+    assert.ok(predicted.vy < -300);
+    const first = predicted.nextFlap;
+    prediction.record({ seq: 3, input: { jump: true }, time: 60 });
+    const stillHeld = prediction.reconcile({ ...predicted, ack: 2 }, options(300, 2));
+    assert.equal(stillHeld.nextFlap, first, 'Held packets cannot retrigger an acknowledged flap');
+    assert.ok(stillHeld.vy > predicted.vy);
+  });
+}
+
+test('prediction applies and decays an authoritative bump without blocking the requested direction', () => {
+  const prediction = new InputPrediction();
+  const player = { ...worker(), bumpVx: -180 };
+  begin(prediction, player);
+  prediction.record({ seq: 1, input: { right: true }, time: 10 });
+  const predicted = prediction.reconcile(player, options(110));
+  assert.ok(predicted.x > player.x);
+  assert.ok(predicted.x < player.x + SPEED * 0.1);
+  assert.ok(Math.abs(predicted.bumpVx) < 180);
+  assert.equal(player.bumpVx, -180, 'Replaying never mutates the authoritative snapshot');
+});

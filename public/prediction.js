@@ -1,4 +1,5 @@
 import { movePlayer } from '../shared/world.js';
+import { queuePlayerInput, consumePlayerInput } from '../shared/input-buffer.js';
 
 const INPUT_KEYS = ['left', 'right', 'jump', 'action', 'dash', 'down'];
 const HISTORY_MS = 2000;
@@ -107,31 +108,35 @@ export class InputPrediction {
     const start = Math.max(pending[0].time, receivedAt - REPLAY_MS);
     if (start >= receivedAt) return player;
     let cursor = start;
-    let input = pending[0].input;
-    for (const command of pending) {
-      if (command.time > start) break;
-      input = command.input;
-    }
-    if (start > pending[0].time) {
+    const trimmed = start > pending[0].time;
+    const buffer = { input: { jump: Boolean(player.jumpHeld), dash: Boolean(player.dashHeld) } };
+    if (trimmed) {
       // A press before the bounded replay window is a held key, not a new
       // jump/dash edge. Later release/press transitions still replay normally.
-      player.jumpHeld = input.jump;
-      player.dashHeld = input.dash;
+      for (const command of pending) {
+        if (command.time > start) break;
+        buffer.input = command.input;
+      }
+      player.jumpHeld = buffer.input.jump;
+      player.dashHeld = buffer.input.dash;
     }
     let simulatedMs = 0;
     const advance = (end) => {
       let remaining = (end - cursor) / 1000;
       while (remaining > 1e-8) {
         const dt = Math.min(STEP_SECONDS, remaining);
-        movePlayer(player, input, map, dt, serverTime + simulatedMs);
+        movePlayer(player, consumePlayerInput(buffer), map, dt, serverTime + simulatedMs);
         simulatedMs += dt * 1000;
         remaining -= dt;
       }
       cursor = end;
     };
     for (const command of pending) {
+      if (command.time < start || (trimmed && command.time === start)) continue;
       if (command.time > cursor) advance(command.time);
-      input = command.input;
+      // Preserve a tap or release/repress even when timestamps coincide.
+      // The authoritative server uses this same one-frame edge buffer.
+      queuePlayerInput(buffer, command.input);
     }
     advance(receivedAt);
     this.lastReplayMs = simulatedMs;

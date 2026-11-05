@@ -19,6 +19,8 @@ import { queuePlayerInput, consumePlayerInput, resetPlayerInput } from './shared
 import { getLobbyReadiness } from './shared/lobby.js';
 import { createBotStrategy, queenRetreatTarget, isQueenGateSafe } from './shared/bot-strategy.js';
 import { getGatorSpeed } from './shared/pacing.js';
+import { pulseBotFlight } from './shared/bot-flight.js';
+import { canContactStrike, bumpOpponents } from './shared/combat.js';
 import { getMapDefinition, isMapId, normalizeMapId } from './shared/maps.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -323,6 +325,8 @@ export function createGameServer({
     p.y = base.y + base.h - PLAYER_H;
     p.vx = 0;
     p.vy = 0;
+    p.bumpVx = 0;
+    p.nextBumpAt = 0;
     p.alive = true;
     p.respawnAt = 0;
     p.carrying = false;
@@ -779,6 +783,7 @@ export function createGameServer({
       nextFlap: p.nextFlap || 0,
       nextDash: p.nextDash || 0,
       dashUntil: p.dashUntil || 0,
+      bumpVx: p.bumpVx || 0,
     };
   }
   function prepareSnapshot(r, now) {
@@ -798,6 +803,9 @@ export function createGameServer({
     const humanCount = players.reduce((count, p) => count + Number(!p.bot), 0);
     const head = JSON.stringify({
       type: 'state',
+      // Keep compact-v1's tuple unchanged. Older clients ignore this sparse
+      // extension; current clients merge it into their prediction state.
+      bumps: Object.fromEntries(players.filter((p) => p.bumpVx).map((p) => [p.id, p.bumpVx])),
       time: now,
       tick: r.tick,
       mapId: r.mapId,
@@ -919,6 +927,7 @@ export function createGameServer({
     victim.respawnAt = now + (victim.role === 'queen' ? 3500 : 2300);
     victim.speedBoost = false;
     victim.dive = false;
+    victim.bumpVx = 0;
     cancelUpgrade(victim);
     if (r.gator.riderId === victim.id) r.gator.riderId = null;
     killer.kills++;
@@ -1093,7 +1102,6 @@ export function createGameServer({
   }
   function resolveContact(r, now) {
     const active = [...r.players.values()].filter((p) => p.alive);
-    const faces = (a, b) => (b.x - a.x) * a.facing >= -4;
     for (let i = 0; i < active.length; i++)
       for (let j = i + 1; j < active.length; j++) {
         if (r.status !== 'playing') return;
@@ -1107,18 +1115,12 @@ export function createGameServer({
           Math.abs(a.y - b.y) >= 36
         )
           continue;
-        const canStrike = (attacker, victim) =>
-          attacker.role !== 'worker' &&
-          now >= attacker.invulnerableUntil &&
-          ((attacker.dive && attacker.y < victim.y) || faces(attacker, victim));
-        const aStrike = canStrike(a, b),
-          bStrike = canStrike(b, a);
-        if (aStrike && bStrike) {
-          if (a.y < b.y - 6) kill(r, b, a, now);
-          else if (b.y < a.y - 6) kill(r, a, b, now);
-          // Equal-height swords clash: neither player gets a random iteration advantage.
-        } else if (aStrike) kill(r, b, a, now);
-        else if (bStrike) kill(r, a, b, now);
+        if (canContactStrike(a, b, now)) kill(r, b, a, now);
+        else if (canContactStrike(b, a, now)) kill(r, a, b, now);
+        else if (bumpOpponents(a, b, now)) {
+          cancelUpgrade(a);
+          cancelUpgrade(b);
+        }
       }
   }
   function tickRoom(r, now, dt) {
@@ -1146,6 +1148,7 @@ export function createGameServer({
       }
       if (!p.bot && now - p.lastInput >= 900) resetPlayerInput(p);
       let input = p.bot ? p.botInput || NO_INPUT : consumePlayerInput(p);
+      if (p.bot) input = pulseBotFlight(p, input, now);
       if (p.bot && p.role === 'worker' && p.botTarget && r.gator.riderId !== p.id)
         input = { ...input, ...r.navigation.steer(p, p.botTarget) };
       if (r.gator.riderId === p.id) {
@@ -1248,7 +1251,7 @@ export function createGameServer({
           cancelUpgrade(p);
         }
       }
-      if (input.action && p.role === 'worker' && !p.upgradeUntil) {
+      if (input.action && p.role === 'worker' && !p.upgradeUntil && now >= (p.nextBumpAt || 0)) {
         const gate = r.gates.find(
           (g) =>
             overlaps(p, g, 12) &&

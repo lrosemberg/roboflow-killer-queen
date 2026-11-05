@@ -90,22 +90,21 @@ for (const mode of ['normal', 'xxl'])
       assert.equal(map.scoreTarget, 12);
       assert.equal(map.berrySpawns.length, 60);
       assert.equal(map.berryPiles.length, mode === 'normal' ? 6 : 12);
-      assert.equal(map.width, mode === 'normal' ? 1440 : 12000);
-      assert.equal(map.height, mode === 'normal' ? 820 : 2000);
+      assert.equal(map.width, mode === 'normal' ? 1440 : 7200);
+      assert.equal(map.height, mode === 'normal' ? 820 : 1600);
       assert.equal(map.bases[0].x, map.width - map.bases[1].x - map.bases[1].w);
       for (const platform of map.platforms) {
         assert.ok(platform.x >= 0 && platform.x + platform.w <= map.width);
         assert.ok(platform.y > 0 && platform.y + platform.h <= map.height);
-        if (mode === 'normal' || definition.id !== 'miami')
-          assert.ok(
-            map.platforms.some(
-              (other) =>
-                other.x === map.width - platform.x - platform.w &&
-                other.y === platform.y &&
-                other.w === platform.w,
-            ),
-            'Gameplay ledges mirror across the arena',
-          );
+        assert.ok(
+          map.platforms.some(
+            (other) =>
+              other.x === map.width - platform.x - platform.w &&
+              other.y === platform.y &&
+              other.w === platform.w,
+          ),
+          'Gameplay ledges mirror across the arena',
+        );
       }
       for (const gate of map.gates)
         assert.ok(
@@ -169,5 +168,37 @@ test('every Classic city preserves contested seven-to-eleven-second collection r
         Math.abs(times[0][i] - times[1][i]) < 0.05,
         `${definition.id} routes should be symmetric`,
       );
+  }
+});
+
+test('compact XXL keeps symmetric supply routes, finish points and access to every elevated tier', () => {
+  for (const definition of PLAYABLE_MAPS) {
+    const map = createMap('xxl', 120, definition.id),
+      navigator = createNavigator(map);
+    assert.deepEqual([map.width, map.height], [7200, 1600]);
+    assert.equal(map.economyPlayerCount, 120);
+    assert.equal(map.scoreTarget, 144);
+    assert.equal(map.berrySpawns.length, 720);
+    assert.deepEqual([map.gatorTrack.x1, map.gatorTrack.x2], [350, 6850]);
+    for (const pile of map.berryPiles)
+      assert.ok(
+        map.berryPiles.some((other) => other.y === pile.y && other.x === map.width - pile.x),
+      );
+    for (const platform of map.platforms) {
+      const target = { x: platform.x + platform.w / 2 - PLAYER_W / 2, y: platform.y - PLAYER_H };
+      for (const base of map.bases)
+        assert.ok(
+          Number.isFinite(navigator.distance(worker(home(base)), target)),
+          `${definition.id}: every platform must connect to both HQs`,
+        );
+    }
+    // Exercise the top tier using movement, not graph connectivity alone.
+    const top = map.platforms.reduce((a, b) => (a.y < b.y ? a : b));
+    travel(
+      worker(home(map.bases[0])),
+      { x: top.x + top.w / 2 - PLAYER_W / 2, y: top.y - PLAYER_H },
+      map,
+      navigator,
+    );
   }
 });

@@ -138,14 +138,14 @@ test('XXL supplies stay distributed across districts and outside immediate HQ co
   assert.equal(map.berryPiles.length, 12);
   const xs = map.berryPiles.map((pile) => pile.x);
   assert.ok(
-    Math.max(...xs) - Math.min(...xs) > 6500,
+    Math.max(...xs) - Math.min(...xs) > map.width * 0.55,
     'The large crew must retain many widely separated collection areas',
   );
   assert.equal(new Set(xs).size, 12);
   for (const base of map.bases)
     for (const pile of map.berryPiles) {
       assert.ok(
-        Math.abs(pile.x - base.x - base.w / 2) > 2000,
+        Math.abs(pile.x - base.x - base.w / 2) > map.width * 0.15,
         'Supply runs should leave the HQ district',
       );
     }

@@ -89,6 +89,7 @@ test('compact-v1 tuple schema preserves false, zero, null, Unicode and predictio
     eliminated: false,
     speedBoost: true,
     emote: '',
+    bumpVx: 0,
   });
   const encoded = JSON.parse(
     JSON.stringify({
@@ -115,6 +116,7 @@ test('negotiated compact state matches legacy state through countdown, Queen liv
   const queen = room.players.get(legacy.id),
     worker = room.players.get(compact.id);
   queen.queenLives = 1;
+  queen.bumpVx = 123.5;
   queen.emote = 'Q "hi" \\ 🦝';
   queen.emoteUntil = Date.now() + 5000;
   worker.carrying = true;
@@ -137,14 +139,29 @@ test('negotiated compact state matches legacy state through countdown, Queen liv
   );
   assert.deepEqual(
     Object.keys(normal.players[0]),
-    PLAYER_FIELDS,
-    'Adding a public field requires an explicit protocol version decision',
+    [...PLAYER_FIELDS, 'bumpVx'],
+    'The sparse bump extension leaves the original compact tuple untouched',
   );
   assert.equal(decoded.players.find((p) => p.id === legacy.id).name, 'Q "hi" \\ 🦝');
   assert.equal(decoded.players.find((p) => p.id === compact.id).upgradeKind, 'warrior');
   assert.ok(normal.time < normal.startsAt);
   assert.equal(normal.countdownUntil, normal.startsAt);
   assert.equal(normal.elapsedSeconds, 0);
+});
+
+test('compact-v1 sparse bumps restore authoritative impulse without changing its tuple', () => {
+  const original = Object.fromEntries(PLAYER_FIELDS.map((field) => [field, 0]));
+  Object.assign(original, { id: 'bumped', alive: true, role: 'worker' });
+  const wire = {
+    type: 'state',
+    encoding: COMPACT_PROTOCOL,
+    players: [encodePlayer(original)],
+    bumps: { bumped: -123.5 },
+  };
+  assert.equal(wire.players[0].length, 34);
+  assert.equal(decodeSnapshot(wire).players[0].bumpVx, -123.5);
+  delete wire.bumps;
+  assert.equal(decodeSnapshot(wire).players[0].bumpVx, 0, 'Old snapshots have no residual impulse');
 });
 
 test('XXL compact snapshots preserve all 120 players with substantially fewer bytes', async (t) => {

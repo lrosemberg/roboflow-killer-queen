@@ -81,6 +81,7 @@ export function createNavigator(map) {
     if (!player.grounded && player.navigationEdge) {
       const edge = player.navigationEdge;
       return move(edge.landing, {
+        jump: edge.kind === 'jump' && player.vy < 0 && player.jumpHeld,
         down: edge.kind === 'drop' && player.y + PLAYER_H <= platforms[edge.from].y + 8,
       });
     }

@@ -103,16 +103,76 @@ test('lifecycle resets discard pending taps and held inputs, and allow a fresh f
   assert.ok(p.vy < -700);
 });
 
-test('Queen flight still flaps while held, then stops flapping after release', () => {
-  const p = makePlayer('queen');
+for (const role of ['queen', 'warrior']) {
+  test(`${role}: holding jump flaps once, repeated released presses sustain flight`, () => {
+    const held = makePlayer(role),
+      tapped = makePlayer(role);
+    resetPlayerInput(held);
+    resetPlayerInput(tapped);
+    queuePlayerInput(held, { jump: true });
+    for (let tick = 0; tick < 100; tick++) {
+      queuePlayerInput(tapped, { jump: tick % 16 === 0 });
+      frame(held, tick);
+      frame(tapped, tick);
+    }
+    assert.equal(held.nextFlap, 1000 + (role === 'queen' ? 190 : 220));
+    assert.equal(held.grounded, true, 'A held key must eventually return to the floor');
+    assert.equal(held.y, 740 - PLAYER_H);
+    assert.ok(tapped.y < held.y - 250, 'Repeated presses permit sustained ascent');
+    assert.ok(tapped.nextFlap > 2500);
+  });
+
+  test(`${role}: subframe release/repress is a fresh flap, including release before simulation`, () => {
+    const p = makePlayer(role);
+    resetPlayerInput(p);
+    queuePlayerInput(p, { jump: true });
+    for (let tick = 0; tick < 16; tick++) frame(p, tick);
+    assert.equal(p.jumpHeld, true);
+    const first = p.nextFlap;
+    queuePlayerInput(p, {});
+    queuePlayerInput(p, { jump: true });
+    queuePlayerInput(p, {});
+    frame(p, 16);
+    assert.ok(p.nextFlap > first);
+    assert.ok(p.vy < -350);
+    const second = p.nextFlap;
+    for (let tick = 17; tick < 100; tick++) frame(p, tick);
+    assert.equal(p.nextFlap, second, 'The buffered tap is consumed only once');
+  });
+
+  test(`${role}: early cooldown taps and lifecycle resets cannot produce delayed flaps`, () => {
+    const p = makePlayer(role);
+    resetPlayerInput(p);
+    queuePlayerInput(p, { jump: true });
+    frame(p);
+    const first = p.nextFlap;
+    queuePlayerInput(p, {});
+    queuePlayerInput(p, { jump: true });
+    for (let tick = 1; tick < 30; tick++) frame(p, tick);
+    assert.equal(p.nextFlap, first, 'An early press is consumed rather than queued until ready');
+    queuePlayerInput(p, {});
+    queuePlayerInput(p, { jump: true });
+    resetPlayerInput(p);
+    frame(p, 30);
+    assert.equal(p.nextFlap, first);
+    queuePlayerInput(p, { jump: true });
+    frame(p, 31);
+    assert.ok(p.nextFlap > first, 'A new press after resetting can flap');
+  });
+}
+
+test('Queen dive consumes a simultaneous flap press, without storing it for the end of the dive', () => {
+  const p = { ...makePlayer('queen'), y: 300, grounded: false };
   resetPlayerInput(p);
+  queuePlayerInput(p, { jump: true, down: true });
+  frame(p);
+  assert.equal(p.dive, true);
+  assert.equal(p.nextFlap, undefined);
   queuePlayerInput(p, { jump: true });
-  for (let tick = 0; tick < 24; tick++) frame(p, tick);
-  assert.ok(p.vy < 0);
-  assert.ok(p.y < 740 - PLAYER_H - 100);
+  frame(p, 1);
+  assert.equal(p.nextFlap, undefined);
   queuePlayerInput(p, {});
-  const nextFlap = p.nextFlap;
-  for (let tick = 24; tick < 50; tick++) frame(p, tick);
-  assert.equal(p.nextFlap, nextFlap);
-  assert.ok(p.vy > 0);
+  queuePlayerInput(p, { jump: true });
+  frame(p, 2);
+  assert.ok(p.vy < 0);
 });

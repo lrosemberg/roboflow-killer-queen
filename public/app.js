@@ -1,7 +1,7 @@
 import { Renderer, renderPreview } from './renderer.js';
 import { movePlayer, SCORE_TARGETS, BOT_DIFFICULTIES, economyForPlayers } from '/shared/world.js';
 import { decodeSnapshot } from '/shared/protocol.js';
-import { drawRaccoon, drawRide, drawData } from './sprites.js';
+import { drawRaccoon, drawRide, drawData, TEAM } from './sprites.js';
 import { InputPrediction } from './prediction.js';
 import { ActivityFeed } from './activity-feed.js';
 import { TouchInput } from './touch-input.js';
@@ -16,7 +16,7 @@ import { createMapPicker } from './map-picker.js';
 bindPageGestureGuard();
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const TEAM_NAMES = ['PURPLE PIXELS', 'SUNSET SYNDICATE'];
+const TEAM_NAMES = TEAM.map((team) => team.name);
 $$('[data-score-target-mode]').forEach(
   (el) => (el.textContent = SCORE_TARGETS[el.dataset.scoreTargetMode]),
 );
@@ -723,9 +723,9 @@ function updateHUD(player) {
             : state.gator.riderId === localId
               ? `${destination.ride.name} engaged. Jump to hop off.`
               : role === 'queen'
-                ? 'Hold jump to fly · S / Shift to dive · Touch gates to claim them'
+                ? 'Tap Space to fly · S / Shift to dive · Touch AI1 to claim'
                 : role === 'warrior'
-                  ? 'Hold jump to fly · Attack by contact from above · Defend the crew'
+                  ? 'Tap Space to fly · Strike from above · Defend the crew'
                   : player.carrying
                     ? 'Deliver to HQ, or enter AI1 and press E to install an upgrade.'
                     : `${player.speedBoost ? 'SPEED BOOST · ' : ''}Roboflow supply piles · E for ${destination.ride.name} / AI1`;
@@ -733,7 +733,7 @@ function updateHUD(player) {
     $('#respawn-overlay').hidden = player.alive || state.status !== 'playing';
     if (touchEnabled)
       $('#role-tip').textContent = $('#role-tip')
-        .textContent.replace('Hold jump', 'Hold FLY')
+        .textContent.replace('Tap Space', 'Tap FLAP')
         .replace('S / Shift', 'DIVE or joystick ↓')
         .replace('Jump to hop off.', 'Tap JUMP to hop off.')
         .replace('press E', 'tap USE CHIP')
@@ -1305,7 +1305,7 @@ function renderVictoryScene(now) {
     team = resultScene.team;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = team === 0 ? '#a78bfa' : '#ff7d91';
+  ctx.fillStyle = TEAM[team].main;
   ctx.globalAlpha = 0.13;
   for (let i = 0; i < 5; i++) ctx.fillRect(200 - i * 18, 110 - i * 17, 200 + i * 36, 5);
   ctx.globalAlpha = 1;
@@ -1572,7 +1572,11 @@ function updateTouchControls(player = state?.players?.find((p) => p.id === local
     touchEnabled && room && socketReady && state?.status === 'playing' && !document.hidden,
   );
   if (player) {
-    $('#touch-jump-label').textContent = player.role === 'worker' ? 'JUMP' : 'FLY';
+    $('#touch-jump-label').textContent = player.role === 'worker' ? 'JUMP' : 'FLAP';
+    $('#touch-jump').setAttribute(
+      'aria-label',
+      player.role === 'worker' ? 'Jump' : 'Flap wings — tap repeatedly to fly',
+    );
     $('#touch-down-label').textContent = player.role === 'queen' ? 'DIVE' : 'DROP';
     $('#touch-action-label').textContent = player.carrying ? 'USE CHIP' : 'ACTION';
     $('#touch-action').disabled = player.role !== 'worker';

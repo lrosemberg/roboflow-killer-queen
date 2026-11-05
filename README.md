@@ -66,21 +66,23 @@ To add a destination, follow the [map recipe](docs/MAP-RECIPE.md). Preview layou
 
 Workers can spend a carried chip at a neutral or friendly AI1 station to gain Warrior wings or speed. Queens claim stations by touching them. Upgrading requires remaining still inside the machine. Queens and Warriors cannot collect chips or ride the getaway ride.
 
-The Classic arena is 1,440 × 820, with grouped stockpiles, elevated HQs and a mirrored zig-zag climb. Workers must travel between supplies and the vault instead of repeating a short local loop. An uninterrupted getaway ride from center takes 70 seconds, or about 47 seconds with an earned speed upgrade. A limited number of armed bots respond to opponents nearing an economic or gator victory; Queens retreat from unsafe fights and nearby warriors can protect a threatened Queen. XXL is 12,000 × 2,000 with a following camera. Player bodies do not create walls: teammates can pass through one another, and armed enemy contact uses combat rules.
+The Classic arena is 1,440 × 820, with grouped stockpiles, elevated HQs and a mirrored zig-zag climb. Workers must travel between supplies and the vault instead of repeating a short local loop. An uninterrupted getaway ride from center takes 70 seconds, or about 47 seconds with an earned speed upgrade. A limited number of armed bots respond to opponents nearing an economic or gator victory; Queens retreat from unsafe fights and nearby warriors can protect a threatened Queen. XXL is 7,200 × 1,600 with a following camera, mirrored platforms and twelve supply piles. Its 120-player capacity and 144-chip target for a full room remain unchanged. Player bodies do not create walls: teammates can pass through one another, and opponents bounce apart on nonlethal contact, and armed enemies need height and facing to score a knockout. A Queen can dive onto opponents below.
 
 See [pacing changes and measured match samples](docs/BALANCE.md).
 
 ## Controls
 
-| Action                             | Keyboard                     |
-| ---------------------------------- | ---------------------------- |
-| Move                               | A / D or left / right arrows |
-| Jump; hold to fly as Queen/Warrior | Space / W / up arrow         |
-| AI1 station or getaway             | E / J                        |
-| Queen dive / drop through platform | S / down; Shift also dives   |
-| Role guide                         | R                            |
-| Crew names and scores              | Hold Tab                     |
-| Menu                               | Escape                       |
+| Action                                        | Keyboard                     |
+| --------------------------------------------- | ---------------------------- |
+| Move                                          | A / D or left / right arrows |
+| Jump; tap repeatedly to flap as Queen/Warrior | Space / W / up arrow         |
+| AI1 station or getaway                        | E / J                        |
+| Queen dive / drop through platform            | S / down; Shift also dives   |
+| Role guide                                    | R                            |
+| Crew names and scores                         | Hold Tab                     |
+| Menu                                          | Escape                       |
+
+Workers make a short hop with a tap and reach their full jump height by holding. Queens and Warriors flap once per fresh press: release and tap again to keep flying.
 
 Mobile supports portrait and landscape, with a right movement stick and left Jump/Action buttons. Fullscreen and screen wake lock are optional browser capabilities. Touch controls can be set to Auto, Always on, or Off. The game uses a following camera on small Classic viewports so characters stay readable.
 
